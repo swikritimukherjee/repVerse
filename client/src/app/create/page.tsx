@@ -11,9 +11,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-// Mock ABIs for demonstration - replace with actual imports
-const jobMarketplaceAbi = [] as const;
-const jobMarketplaceAddress = '0x1234567890123456789012345678901234567890' as const;
+import { jobMarketplaceAbi, jobMarketplaceAddress } from '@/abis/abi';
+import { repTokenAbi, repTokenAddress } from '@/abis/abi';
+
 
 export default function CreateJobPage() {
   const [fee, setFee] = useState('');

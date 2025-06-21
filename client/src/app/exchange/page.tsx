@@ -1,6 +1,5 @@
 "use client"
 
-
 import { useState, useEffect } from 'react';
 import { 
   useWriteContract, 
@@ -15,8 +14,8 @@ import Navigation from '@/components/Navigation';
 
 const RepTokenInterface = () => {
   const { address, isConnected } = useAccount();
-  const [mintAmountEth, setMintAmountEth] = useState('');
-  const [burnAmountRep, setBurnAmountRep] = useState('');
+  const [buyAmountEth, setBuyAmountEth] = useState('');
+  const [sellAmountRep, setSellAmountRep] = useState('');
   const [transferAmount, setTransferAmount] = useState('');
   const [recipient, setRecipient] = useState('');
   const [userBalance, setUserBalance] = useState('0');
@@ -32,39 +31,53 @@ const RepTokenInterface = () => {
     query: { enabled: isConnected }
   });
 
-  // Read token price in ETH
-  const { data: priceData } = useReadContract({
-    abi: repTokenAbi,
-    address: repTokenAddress,
-    functionName: 'getTokenPriceInEth'
-  });
-
-  // Read latest ETH price
+  // Read ETH price (USD)
   const { data: ethPriceData } = useReadContract({
     abi: repTokenAbi,
     address: repTokenAddress,
     functionName: 'getLatestPrice'
   });
 
-  // Mint function
+  // Calculate token price in ETH
+  useEffect(() => {
+    if (ethPriceData) {
+      const ethPriceBigInt = ethPriceData as bigint;
+      setEthPrice(formatUnits(ethPriceBigInt, 18));
+      
+      // Calculate REP/ETH price: 1 REP = (1 * 10^18) / ethPrice (USD)
+      if (ethPriceBigInt > 0) {
+        const tokenPriceValue = (BigInt(1e18) * BigInt(1e18)) / ethPriceBigInt;
+        setTokenPrice(formatUnits(tokenPriceValue, 18));
+      }
+    }
+  }, [ethPriceData]);
+
+  // Update balance
+  useEffect(() => {
+    if (balanceData) {
+      setUserBalance(formatUnits(balanceData as bigint, 18));
+    }
+  }, [balanceData]);
+
+  // Buy function
   const { 
-    data: mintHash,
-    isPending: isMinting,
-    writeContract: mintWrite 
+    data: buyHash,
+    isPending: isBuying,
+    writeContract: buyWrite 
   } = useWriteContract();
 
-  const { isLoading: isMintConfirming, isSuccess: isMintSuccess } = 
-    useWaitForTransactionReceipt({ hash: mintHash });
+  const { isLoading: isBuyConfirming, isSuccess: isBuySuccess } = 
+    useWaitForTransactionReceipt({ hash: buyHash });
 
-  // Burn function
+  // Sell function
   const { 
-    data: burnHash,
-    isPending: isBurning,
-    writeContract: burnWrite 
+    data: sellHash,
+    isPending: isSelling,
+    writeContract: sellWrite 
   } = useWriteContract();
 
-  const { isLoading: isBurnConfirming, isSuccess: isBurnSuccess } = 
-    useWaitForTransactionReceipt({ hash: burnHash });
+  const { isLoading: isSellConfirming, isSuccess: isSellSuccess } = 
+    useWaitForTransactionReceipt({ hash: sellHash });
 
   // Transfer function
   const { 
@@ -76,46 +89,33 @@ const RepTokenInterface = () => {
   const { isLoading: isTransferConfirming, isSuccess: isTransferSuccess } = 
     useWaitForTransactionReceipt({ hash: transferHash });
 
-  // Update states from blockchain data
-  useEffect(() => {
-    if (balanceData) {
-      setUserBalance(formatUnits(balanceData as bigint, 18));
-    }
-    if (priceData) {
-      setTokenPrice(formatUnits(priceData as bigint, 18));
-    }
-    if (ethPriceData) {
-      setEthPrice(formatUnits(ethPriceData as bigint, 18));
-    }
-  }, [balanceData, priceData, ethPriceData]);
-
   // Refresh data after successful transactions
   useEffect(() => {
-    if (isMintSuccess || isBurnSuccess || isTransferSuccess) {
+    if (isBuySuccess || isSellSuccess || isTransferSuccess) {
       refetchBalance();
     }
-  }, [isMintSuccess, isBurnSuccess, isTransferSuccess, refetchBalance]);
+  }, [isBuySuccess, isSellSuccess, isTransferSuccess, refetchBalance]);
 
-  const handleMint = () => {
-    if (!mintAmountEth) return;
+  const handleBuy = () => {
+    if (!buyAmountEth) return;
     
-    const weiValue = parseUnits(mintAmountEth, 18);
-    mintWrite({
+    const weiValue = parseUnits(buyAmountEth, 18);
+    buyWrite({
       abi: repTokenAbi,
       address: repTokenAddress,
-      functionName: 'mint',
+      functionName: 'buy',
       value: weiValue
     });
   };
 
-  const handleBurn = () => {
-    if (!burnAmountRep) return;
+  const handleSell = () => {
+    if (!sellAmountRep) return;
     
-    const weiAmount = parseUnits(burnAmountRep, 18);
-    burnWrite({
+    const weiAmount = parseUnits(sellAmountRep, 18);
+    sellWrite({
       abi: repTokenAbi,
       address: repTokenAddress,
-      functionName: 'burn',
+      functionName: 'sell',
       args: [weiAmount]
     });
   };
@@ -132,9 +132,34 @@ const RepTokenInterface = () => {
     });
   };
 
+  // Calculate REP tokens to receive for ETH amount
+  const calculateRepToReceive = () => {
+    if (!buyAmountEth || !ethPrice) return '0.000000';
+    try {
+      const ethInWei = parseUnits(buyAmountEth, 18);
+      const ethPriceBigInt = parseUnits(ethPrice, 18);
+      const repAmount = (ethInWei * ethPriceBigInt) / BigInt(1e18);
+      return formatUnits(repAmount, 18);
+    } catch {
+      return '0.000000';
+    }
+  };
+
+  // Calculate ETH to receive for REP amount
+  const calculateEthToReceive = () => {
+    if (!sellAmountRep || !ethPrice) return '0.000000';
+    try {
+      const repInWei = parseUnits(sellAmountRep, 18);
+      const ethPriceBigInt = parseUnits(ethPrice, 18);
+      const ethAmount = (repInWei * BigInt(1e18)) / ethPriceBigInt;
+      return formatUnits(ethAmount, 18);
+    } catch {
+      return '0.000000';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-cyber-bg cyber-grid relative overflow-hidden">
-        
       {/* Animated background elements */}
       <div className="absolute inset-0 bg-cyber-gradient opacity-50"></div>
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyber-accent to-transparent animate-data-flow"></div>
@@ -167,18 +192,22 @@ const RepTokenInterface = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          {/* User Balance Card */}
           <div className="cyber-card p-6 rounded-lg data-stream animate-float" style={{ animationDelay: '0s' }}>
             <div className="flex items-center justify-between mb-4">
               <Wallet className="text-cyber-accent" size={24} />
               <Activity className="text-cyber-accent/50" size={16} />
             </div>
             <h3 className="font-mono text-cyber-accent/80 text-sm uppercase tracking-wider mb-2">Your REP Balance</h3>
-            <p className="text-3xl font-bold cyber-text-glow">{Number(userBalance).toFixed(4)} REP</p>
+            <p className="text-3xl font-bold cyber-text-glow">
+              {Number(userBalance).toFixed(4)} REP
+            </p>
             <div className="mt-2 text-xs text-cyber-accent/60 font-mono">
-              ${(Number(userBalance) * Number(tokenPrice) * Number(ethPrice)).toFixed(2)} USD
+              ${(Number(userBalance) * 1).toFixed(2)} USD
             </div>
           </div>
           
+          {/* Token Price Card */}
           <div className="cyber-card p-6 rounded-lg data-stream animate-float" style={{ animationDelay: '0.5s' }}>
             <div className="flex items-center justify-between mb-4">
               <TrendingUp className="text-cyber-purple" size={24} />
@@ -191,6 +220,7 @@ const RepTokenInterface = () => {
             </div>
           </div>
           
+          {/* ETH Price Card */}
           <div className="cyber-card p-6 rounded-lg data-stream animate-float" style={{ animationDelay: '1s' }}>
             <div className="flex items-center justify-between mb-4">
               <DollarSign className="text-cyber-green" size={24} />
@@ -206,13 +236,13 @@ const RepTokenInterface = () => {
 
         {/* Action Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Mint Section */}
+          {/* Buy Section */}
           <div className="cyber-card p-8 rounded-lg animate-float" style={{ animationDelay: '0.2s' }}>
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 rounded-lg bg-cyber-blue/20 border border-cyber-blue/30">
                 <ArrowUpRight className="text-cyber-blue" size={20} />
               </div>
-              <h2 className="text-xl font-bold text-cyber-blue cyber-text-glow">MINT TOKENS</h2>
+              <h2 className="text-xl font-bold text-cyber-blue cyber-text-glow">BUY TOKENS</h2>
             </div>
             
             <div className="space-y-4">
@@ -222,52 +252,50 @@ const RepTokenInterface = () => {
                 </label>
                 <input
                   type="text"
-                  value={mintAmountEth}
-                  onChange={(e) => setMintAmountEth(e.target.value)}
+                  value={buyAmountEth}
+                  onChange={(e) => setBuyAmountEth(e.target.value)}
                   placeholder="0.000"
                   className="w-full cyber-input p-4 rounded-lg font-mono text-lg"
-                  disabled={isMinting || isMintConfirming}
+                  disabled={isBuying || isBuyConfirming}
                 />
               </div>
               
               <div className="p-4 bg-cyber-blue/10 rounded-lg border border-cyber-blue/20">
                 <p className="text-sm text-cyber-blue/80 font-mono">
-                  You'll receive: {mintAmountEth && ethPrice 
-                    ? `${(Number(mintAmountEth) * Number(ethPrice)).toFixed(6)} REP` 
-                    : '0.000000 REP'}
+                  You'll receive: {buyAmountEth ? `${calculateRepToReceive()} REP` : '0.000000 REP'}
                 </p>
               </div>
               
               <button
-                onClick={handleMint}
-                disabled={isMinting || isMintConfirming || !isConnected}
+                onClick={handleBuy}
+                disabled={isBuying || isBuyConfirming || !isConnected}
                 className="w-full cyber-button p-4 rounded-lg font-mono font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isMinting || isMintConfirming ? (
+                {isBuying || isBuyConfirming ? (
                   <span className="flex items-center justify-center gap-2">
                     <Zap className="animate-spin" size={16} />
                     PROCESSING...
                   </span>
                 ) : (
-                  'MINT REP'
+                  'BUY REP'
                 )}
               </button>
               
-              {isMintSuccess && (
+              {isBuySuccess && (
                 <div className="p-3 bg-cyber-green/20 border border-cyber-green/30 rounded-lg">
-                  <p className="text-cyber-green font-mono text-sm">✓ MINT SUCCESSFUL</p>
+                  <p className="text-cyber-green font-mono text-sm">✓ PURCHASE SUCCESSFUL</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Burn Section */}
+          {/* Sell Section */}
           <div className="cyber-card p-8 rounded-lg animate-float" style={{ animationDelay: '0.4s' }}>
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 rounded-lg bg-cyber-accent-secondary/20 border border-cyber-accent-secondary/30">
                 <ArrowDownLeft className="text-cyber-accent-secondary" size={20} />
               </div>
-              <h2 className="text-xl font-bold text-cyber-accent-secondary cyber-text-glow">BURN TOKENS</h2>
+              <h2 className="text-xl font-bold text-cyber-accent-secondary cyber-text-glow">SELL TOKENS</h2>
             </div>
             
             <div className="space-y-4">
@@ -277,40 +305,38 @@ const RepTokenInterface = () => {
                 </label>
                 <input
                   type="text"
-                  value={burnAmountRep}
-                  onChange={(e) => setBurnAmountRep(e.target.value)}
+                  value={sellAmountRep}
+                  onChange={(e) => setSellAmountRep(e.target.value)}
                   placeholder="0.000000"
                   className="w-full cyber-input p-4 rounded-lg font-mono text-lg"
-                  disabled={isBurning || isBurnConfirming}
+                  disabled={isSelling || isSellConfirming}
                 />
               </div>
               
               <div className="p-4 bg-cyber-accent-secondary/10 rounded-lg border border-cyber-accent-secondary/20">
                 <p className="text-sm text-cyber-accent-secondary/80 font-mono">
-                  You'll receive: {burnAmountRep && tokenPrice 
-                    ? `${(Number(burnAmountRep) * Number(tokenPrice)).toFixed(6)} ETH` 
-                    : '0.000000 ETH'}
+                  You'll receive: {sellAmountRep ? `${calculateEthToReceive()} ETH` : '0.000000 ETH'}
                 </p>
               </div>
               
               <button
-                onClick={handleBurn}
-                disabled={isBurning || isBurnConfirming || !isConnected}
+                onClick={handleSell}
+                disabled={isSelling || isSellConfirming || !isConnected}
                 className="w-full bg-gradient-to-r from-cyber-accent-secondary/20 to-cyber-purple/20 border border-cyber-accent-secondary/50 text-cyber-accent-secondary p-4 rounded-lg font-mono font-bold uppercase tracking-wider hover:from-cyber-accent-secondary/30 hover:to-cyber-purple/30 hover:shadow-lg hover:shadow-cyber-accent-secondary/20 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isBurning || isBurnConfirming ? (
+                {isSelling || isSellConfirming ? (
                   <span className="flex items-center justify-center gap-2">
                     <Zap className="animate-spin" size={16} />
                     PROCESSING...
                   </span>
                 ) : (
-                  'BURN REP'
+                  'SELL REP'
                 )}
               </button>
               
-              {isBurnSuccess && (
+              {isSellSuccess && (
                 <div className="p-3 bg-cyber-green/20 border border-cyber-green/30 rounded-lg">
-                  <p className="text-cyber-green font-mono text-sm">✓ BURN SUCCESSFUL</p>
+                  <p className="text-cyber-green font-mono text-sm">✓ SALE SUCCESSFUL</p>
                 </div>
               )}
             </div>

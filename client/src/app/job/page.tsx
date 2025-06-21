@@ -1,279 +1,200 @@
-// import { useState, useEffect } from 'react';
-// import { 
-//   useAccount,
-//   useWriteContract,
-//   useWaitForTransactionReceipt,
-//   usePublicClient,
-//   useChainId,
-//   useReadContract
-// } from 'wagmi';
-// import { jobMarketplaceAbi } from '@/abis/abi';
-// import { jobMarketplaceAddress } from '@/constants/addresses';
-// import { type BaseError } from 'viem';
+// app/marketplace/page.tsx
+'use client';
 
-// // Define job type based on contract return structure
-// type JobDetails = {
-//   name: string;
-//   imageURI: string;
-//   descriptionURI: string;
-//   employer: `0x${string}`;
-//   totalFee: bigint;
-//   maxFreelancers: bigint;
-//   status: number;
-//   createdAt: number;
-//   selectedCount: number;
-//   multiFreelancerAllowed: boolean;
-//   escrowBalance: bigint;
-//   employerStake: bigint;
-// };
+import { useState, useEffect, useMemo } from 'react';
+import axios from 'axios';
+import { formatEther } from 'viem';
+import { 
+  useReadContract,
+  useAccount
+} from 'wagmi';
+import { JobCard } from '@/components/JobCard';
+import { SkeletonGrid } from '@/components/SkeletonGrid';
+import { 
+  jobMarketplaceAbi, 
+  jobMarketplaceAddress 
+} from '@/abis/abi';
+import { 
+  repTokenAbi, 
+  repTokenAddress 
+} from '@/abis/abi';
 
-// export default function JobMarketplace() {
-//   const { address } = useAccount();
-//   const chainId = useChainId();
-//   const publicClient = usePublicClient();
-  
-//   // State variables
-//   const [jobs, setJobs] = useState<JobDetails[]>([]);
-//   const [selectedJob, setSelectedJob] = useState<JobDetails | null>(null);
-//   const [isModalOpen, setIsModalOpen] = useState(false);
-//   const [loading, setLoading] = useState(true);
-//   const [error, setError] = useState<string | null>(null);
-//   const [jobCounter, setJobCounter] = useState(0);
+interface JobMetadata {
+  name: string;
+  description: string;
+  image: string;
+  attributes: { trait_type: string; value: string }[];
+}
 
-//   // Get job counter
-//   const { data: counterData } = useReadContract({
-//     address: jobMarketplaceAddress,
-//     abi: jobMarketplaceAbi,
-//     functionName: 'jobCounter',
-//   });
+interface JobData {
+  id: number;
+  employer: string;
+  fee: string;
+  metadata: JobMetadata;
+}
 
-//   useEffect(() => {
-//     if (counterData !== undefined) {
-//       setJobCounter(Number(counterData));
-//     }
-//   }, [counterData]);
+export default function MarketplacePage() {
+  const [jobs, setJobs] = useState<JobData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { address } = useAccount();
 
-//   // Fetch all jobs
-//   useEffect(() => {
-//     const fetchJobs = async () => {
-//       if (jobCounter <= 0) {
-//         setLoading(false);
-//         return;
-//       }
-      
-//       setLoading(true);
-//       try {
-//         const jobsArray: JobDetails[] = [];
+  // Fetch job counter
+  const { data: jobCounter } = useReadContract({
+    address: jobMarketplaceAddress,
+    abi: jobMarketplaceAbi,
+    functionName: 'jobCounter',
+  });
+
+  // Create job IDs array
+  const jobIds = useMemo(() => {
+    if (!jobCounter) return [];
+    const count = Number(jobCounter);
+    return Array.from({ length: count }, (_, i) => i + 1);
+  }, [jobCounter]);
+
+  // Fetch job details in batches
+  useEffect(() => {
+    const fetchJobs = async () => {
+      if (jobIds.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const activeJobs: JobData[] = [];
+
+        // Process jobs in batches of 10
+        for (let i = 0; i < jobIds.length; i += 10) {
+          const batch = jobIds.slice(i, i + 10);
+          const batchJobs = await Promise.all(
+            batch.map(async (id) => {
+              try {
+                const [jobDetails, metadataURI] = await Promise.all([
+                  // Fetch job details
+                  useReadContract({
+                    address: jobMarketplaceAddress,
+                    abi: jobMarketplaceAbi,
+                    functionName: 'getJobDetails',
+                    args: [BigInt(id)],
+                  }).data,
+                  
+                  // Fetch metadata URI
+                  useReadContract({
+                    address: jobMarketplaceAddress,
+                    abi: jobMarketplaceAbi,
+                    functionName: 'tokenURI',
+                    args: [BigInt(id)],
+                  }).data
+                ]);
+
+                if (!jobDetails || !metadataURI) return null;
+                
+                // Check if job is active (status 0)
+                if (jobDetails[3] !== 0) return null;
+
+                // Fetch metadata
+                const { data: metadata } = await axios.get<JobMetadata>(
+                  convertIpfsUrl(metadataURI)
+                );
+
+                return {
+                  id,
+                  employer: jobDetails[0],
+                  fee: formatEther(jobDetails[1]), // Convert from wei
+                  metadata
+                };
+              } catch (err) {
+                console.warn(`Error fetching job ${id}:`, err);
+                return null;
+              }
+            })
+          );
+
+          // Filter out nulls and add to active jobs
+          batchJobs.forEach(job => job && activeJobs.push(job));
+        }
+
+        setJobs(activeJobs);
+      } catch (err) {
+        console.error("Failed to fetch jobs:", err);
+        setError("Failed to load marketplace data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJobs();
+  }, [jobIds]);
+
+  const convertIpfsUrl = (url: string) => {
+    if (url.startsWith("ipfs://")) {
+      return `https://ipfs.io/ipfs/${url.replace("ipfs://", "")}`;
+    }
+    return url;
+  };
+
+  const handleRetry = () => {
+    setError(null);
+    setLoading(true);
+    // Trigger re-fetch by resetting state
+    setJobs([]);
+  };
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-12 text-center">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          <p>{error}</p>
+          <button 
+            onClick={handleRetry}
+            className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-12">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Job Marketplace</h1>
+          <p className="text-gray-600">
+            Browse active job opportunities and apply using your REP tokens
+          </p>
+        </div>
         
-//         // Fetch job details sequentially
-//         for (let i = 1; i <= jobCounter; i++) {
-//           const jobData = await publicClient.readContract({
-//             address: jobMarketplaceAddress,
-//             abi: jobMarketplaceAbi,
-//             functionName: 'getSFTDetails',
-//             args: [BigInt(i)]
-//           }) as JobDetails;
-          
-//           jobsArray.push(jobData);
-//         }
-        
-//         setJobs(jobsArray);
-//       } catch (err) {
-//         setError('Failed to load jobs');
-//         console.error(err);
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
+        {address && (
+          <div className="bg-indigo-50 px-4 py-2 rounded-lg">
+            <p className="text-indigo-700 font-medium">
+              Connected: {address.slice(0, 6)}...{address.slice(-4)}
+            </p>
+          </div>
+        )}
+      </div>
 
-//     fetchJobs();
-//   }, [jobCounter, publicClient]);
-
-//   // Job application handler
-//   const { 
-//     data: applyHash,
-//     error: applyError,
-//     isPending: isApplying,
-//     writeContract: applyToJob 
-//   } = useWriteContract();
-
-//   const handleApply = (jobId: bigint, proposalURI: string) => {
-//     applyToJob({
-//       address: jobMarketplaceAddress,
-//       abi: jobMarketplaceAbi,
-//       functionName: 'applyToJob',
-//       args: [jobId, proposalURI],
-//     });
-//   };
-
-//   // Wait for application transaction
-//   const { isLoading: isConfirming } = useWaitForTransactionReceipt({
-//     hash: applyHash,
-//   });
-
-//   // Modal handlers
-//   const openJobModal = (job: JobDetails) => {
-//     setSelectedJob(job);
-//     setIsModalOpen(true);
-//   };
-
-//   const closeJobModal = () => {
-//     setIsModalOpen(false);
-//     setSelectedJob(null);
-//   };
-
-//   if (loading) return <div className="text-center py-10">Loading jobs...</div>;
-//   if (error) return <div className="text-red-500 text-center py-10">{error}</div>;
-
-//   return (
-//     <div className="container mx-auto px-4 py-8">
-//       <h1 className="text-3xl font-bold mb-8 text-center">Job Marketplace</h1>
-      
-//       {jobs.length === 0 ? (
-//         <div className="text-center py-20">
-//           <h2 className="text-xl text-gray-500">No jobs available yet</h2>
-//           <p className="mt-2">Create the first job to get started!</p>
-//         </div>
-//       ) : (
-//         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-//           {jobs.map((job, index) => (
-//             <div 
-//               key={index} 
-//               className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-//             >
-//               <div className="p-5">
-//                 <h2 className="text-xl font-semibold mb-2 truncate">{job.name}</h2>
-                
-//                 {job.imageURI ? (
-//                   <img 
-//                     src={job.imageURI} 
-//                     alt={job.name} 
-//                     className="w-full h-48 object-cover rounded-lg mb-4"
-//                   />
-//                 ) : (
-//                   <div className="bg-gray-200 border-2 border-dashed rounded-xl w-full h-48 mb-4" />
-//                 )}
-                
-//                 <div className="flex justify-between items-center mb-3">
-//                   <span className="text-sm font-medium text-gray-600">
-//                     Fee: {Number(job.totalFee)} REP
-//                   </span>
-//                   <span className={`px-2 py-1 text-xs rounded-full ${
-//                     job.status === 0 ? 'bg-green-100 text-green-800' :
-//                     job.status === 1 ? 'bg-yellow-100 text-yellow-800' :
-//                     job.status === 2 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-//                   }`}>
-//                     {job.status === 0 ? 'Active' : 
-//                      job.status === 1 ? 'In Progress' : 
-//                      job.status === 2 ? 'Completed' : 'Cancelled'}
-//                   </span>
-//                 </div>
-                
-//                 <button
-//                   onClick={() => openJobModal(job)}
-//                   className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-//                 >
-//                   View Details
-//                 </button>
-//               </div>
-//             </div>
-//           ))}
-//         </div>
-//       )}
-
-//       {/* Job Detail Modal */}
-//       {isModalOpen && selectedJob && (
-//         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-//           <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-//             <div className="p-6">
-//               <div className="flex justify-between items-start mb-4">
-//                 <h2 className="text-2xl font-bold">{selectedJob.name}</h2>
-//                 <button 
-//                   onClick={closeJobModal}
-//                   className="text-gray-500 hover:text-gray-700"
-//                 >
-//                   ✕
-//                 </button>
-//               </div>
-              
-//               {selectedJob.imageURI && (
-//                 <img 
-//                   src={selectedJob.imageURI} 
-//                   alt={selectedJob.name} 
-//                   className="w-full h-64 object-cover rounded-lg mb-4"
-//                 />
-//               )}
-              
-//               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-//                 <div>
-//                   <h3 className="font-semibold text-gray-700">Employer</h3>
-//                   <p className="truncate">{selectedJob.employer}</p>
-//                 </div>
-//                 <div>
-//                   <h3 className="font-semibold text-gray-700">Fee</h3>
-//                   <p>{Number(selectedJob.totalFee)} REP</p>
-//                 </div>
-//                 <div>
-//                   <h3 className="font-semibold text-gray-700">Status</h3>
-//                   <p>{selectedJob.status === 0 ? 'Active' : 
-//                      selectedJob.status === 1 ? 'In Progress' : 
-//                      selectedJob.status === 2 ? 'Completed' : 'Cancelled'}</p>
-//                 </div>
-//                 <div>
-//                   <h3 className="font-semibold text-gray-700">Created</h3>
-//                   <p>{new Date(Number(selectedJob.createdAt) * 1000).toLocaleDateString()}</p>
-//                 </div>
-//               </div>
-              
-//               <div className="mb-6">
-//                 <h3 className="font-semibold text-gray-700 mb-2">Description</h3>
-//                 {selectedJob.descriptionURI ? (
-//                   <a 
-//                     href={selectedJob.descriptionURI} 
-//                     target="_blank" 
-//                     rel="noopener noreferrer"
-//                     className="text-indigo-600 hover:underline"
-//                   >
-//                     View Job Description
-//                   </a>
-//                 ) : (
-//                   <p>No description available</p>
-//                 )}
-//               </div>
-              
-//               <div className="flex flex-wrap gap-3">
-//                 {address !== selectedJob.employer && selectedJob.status === 0 && (
-//                   <button
-//                     onClick={() => handleApply(BigInt(jobs.indexOf(selectedJob) + BigInt(1), "https://my-proposal.com")}
-//                     disabled={isApplying || isConfirming}
-//                     className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-//                   >
-//                     {isApplying || isConfirming ? 'Applying...' : 'Apply to Job'}
-//                   </button>
-//                 )}
-                
-//                 <button
-//                   onClick={closeJobModal}
-//                   className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-//                 >
-//                   Close
-//                 </button>
-//               </div>
-              
-//               {(applyError || isConfirming) && (
-//                 <div className="mt-4 text-sm">
-//                   {applyError && (
-//                     <p className="text-red-500">Error: {(applyError as BaseError).shortMessage || applyError.message}</p>
-//                   )}
-//                   {isConfirming && (
-//                     <p className="text-blue-500">Waiting for confirmation...</p>
-//                   )}
-//                 </div>
-//               )}
-//             </div>
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
+      {loading ? (
+        <SkeletonGrid count={6} />
+      ) : jobs.length === 0 ? (
+        <div className="text-center py-12">
+          <h2 className="text-xl font-semibold text-gray-700 mb-2">
+            No active jobs found
+          </h2>
+          <p className="text-gray-500">
+            Check back later for new job postings
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {jobs.map((job) => (
+            <JobCard key={job.id} job={job} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
