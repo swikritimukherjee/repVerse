@@ -10,7 +10,6 @@ import { repTokenAbi, repTokenAddress } from '@/abis/abi';
 import { useAccount, useConfig, useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
 
-// Function to shorten wallet address
 const shortenAddress = (address: string) => {
   return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
 };
@@ -31,12 +30,11 @@ const Navigation = () => {
     { name: 'Profile', href: '/profile', icon: Users },
   ];
 
-  // Read REP token balance
+  // Read REP token balance using wagmi hook
   const { 
     data: balanceData, 
     error: balanceError, 
-    isLoading: isBalanceLoading, 
-    queryKey: balanceQueryKey
+    isLoading: isBalanceLoading 
   } = useReadContract({
     config,
     abi: repTokenAbi,
@@ -45,9 +43,13 @@ const Navigation = () => {
     args: [address!],
     query: {
       enabled: !!address,
-      refetchInterval: 15000, // Refresh every 15 seconds
+      refetchInterval: 15000,
     }
-  });
+  }) as {
+    data: bigint | undefined;
+    error: Error | null;
+    isLoading: boolean;
+  };
 
   // Format balance
   const repBalance = useMemo(() => {

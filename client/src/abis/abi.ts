@@ -1,4 +1,4 @@
-export const repTokenAbi =[
+export const repTokenAbi = [
   {
     "inputs": [],
     "stateMutability": "nonpayable",
@@ -846,11 +846,9 @@ export const repTokenAbi =[
     "type": "function"
   },
   {
-    "stateMutability": "payable",
-    "type": "receive"
+    "stateMutability": "payable",    "type": "receive"
   }
 ]
-export const repTokenAddress = "0x1eB6dDFdD2e78FfECA24DD1a0171E6e907d8dd9b";
 export const jobMarketplaceAbi=[
   {
     "inputs": [
@@ -1989,5 +1987,7 @@ export const jobMarketplaceAbi=[
     "type": "function"
   }
 ]
-export const jobMarketplaceAddress = "0x28Fe818711e35DB7eA9Bc883dEB1406F26b8c5c2";
 
+// Contract addresses on Avalanche Fuji Testnet
+export const repTokenAddress = "0x7f6aD72530D0478c949fD223074F382D0C2D78ad";
+export const jobMarketplaceAddress = "0x28Fe818711e35DB7eA9Bc883dEB1406F26b8c5c2";

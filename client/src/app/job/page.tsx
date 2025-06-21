@@ -6,7 +6,8 @@ import axios from 'axios';
 import { formatEther } from 'viem';
 import { 
   useReadContract,
-  useAccount
+  useAccount,
+  useReadContracts
 } from 'wagmi';
 import { JobCard } from '@/components/JobCard';
 import { SkeletonGrid } from '@/components/SkeletonGrid';
@@ -51,82 +52,115 @@ export default function MarketplacePage() {
     if (!jobCounter) return [];
     const count = Number(jobCounter);
     return Array.from({ length: count }, (_, i) => i + 1);
-  }, [jobCounter]);
-
-  // Fetch job details in batches
+  }, [jobCounter]);  // We won't use these hooks since we're using direct ethers.js calls
+  // Setup contract reads for job details and URIs
+  const contractsConfig = useMemo(() => {
+    const configs: any[] = [];
+    
+    if (jobIds.length === 0) return [];
+    
+    // Set up contract reads for job details and tokenURIs
+    jobIds.forEach(id => {
+      configs.push({
+        address: jobMarketplaceAddress,
+        abi: jobMarketplaceAbi,
+        functionName: 'getJobDetails',
+        args: [BigInt(id)],
+      });
+      
+      configs.push({
+        address: jobMarketplaceAddress,
+        abi: jobMarketplaceAbi,
+        functionName: 'tokenURI',
+        args: [BigInt(id)],
+      });
+    });
+    
+    return configs;
+  }, [jobIds]);
+  // Use wagmi's useReadContracts to batch fetch data
+  const { data: jobsData, isLoading: isJobsLoading, error: contractError } = useReadContracts({
+    contracts: contractsConfig,
+  });
+  
+  // Debug contract errors
   useEffect(() => {
-    const fetchJobs = async () => {
-      if (jobIds.length === 0) {
+    if (contractError) {
+      console.error("Contract read error:", contractError);
+      setError("Failed to read blockchain data");
+    }
+    
+    // Log job counter and job IDs for debugging
+    console.log("Job counter:", jobCounter);
+    console.log("Job IDs to fetch:", jobIds);
+  }, [contractError, jobCounter, jobIds]);
+    // Process job data and fetch metadata
+  useEffect(() => {
+    const fetchJobsMetadata = async () => {
+      if (!jobsData || jobsData.length === 0) {
         setLoading(false);
         return;
       }
-
+      
       try {
         setLoading(true);
         const activeJobs: JobData[] = [];
-
-        // Process jobs in batches of 10
-        for (let i = 0; i < jobIds.length; i += 10) {
-          const batch = jobIds.slice(i, i + 10);
-          const batchJobs = await Promise.all(
-            batch.map(async (id) => {
-              try {
-                const [jobDetails, metadataURI] = await Promise.all([
-                  // Fetch job details
-                  useReadContract({
-                    address: jobMarketplaceAddress,
-                    abi: jobMarketplaceAbi,
-                    functionName: 'getJobDetails',
-                    args: [BigInt(id)],
-                  }).data,
-                  
-                  // Fetch metadata URI
-                  useReadContract({
-                    address: jobMarketplaceAddress,
-                    abi: jobMarketplaceAbi,
-                    functionName: 'tokenURI',
-                    args: [BigInt(id)],
-                  }).data
-                ]);
-
-                if (!jobDetails || !metadataURI) return null;
-                
-                // Check if job is active (status 0)
-                if (jobDetails[3] !== 0) return null;
-
-                // Fetch metadata
-                const { data: metadata } = await axios.get<JobMetadata>(
-                  convertIpfsUrl(metadataURI)
-                );
-
-                return {
-                  id,
-                  employer: jobDetails[0],
-                  fee: formatEther(jobDetails[1]), // Convert from wei
-                  metadata
-                };
-              } catch (err) {
-                console.warn(`Error fetching job ${id}:`, err);
-                return null;
-              }
-            })
-          );
-
-          // Filter out nulls and add to active jobs
-          batchJobs.forEach(job => job && activeJobs.push(job));
+        
+        // Process data in pairs (details and URI)
+        for (let i = 0; i < jobsData.length; i += 2) {
+          const jobId = jobIds[Math.floor(i/2)];
+          const jobDetails = jobsData[i].result as any[];
+          const metadataURI = jobsData[i+1].result as string;
+          
+          if (!jobDetails || !metadataURI) {
+            console.log(`Job ${jobId}: missing details or metadata`);
+            continue;
+          }
+          
+          // Log job details for debugging
+          console.log(`Job ${jobId} details:`, {
+            employer: jobDetails[0],
+            fee: formatEther(jobDetails[1]),
+            totalStaked: jobDetails[2].toString(),
+            status: Number(jobDetails[3]),
+            createdAt: Number(jobDetails[4])
+          });
+          
+          // Check if job is active (status 0)
+          if (Number(jobDetails[3]) !== 0) {
+            console.log(`Job ${jobId} status is ${jobDetails[3]}, skipping`);
+            continue;
+          }
+          
+          try {
+            // Fetch metadata
+            const { data: metadata } = await axios.get<JobMetadata>(
+              convertIpfsUrl(metadataURI)
+            );
+            
+            activeJobs.push({
+              id: jobId,
+              employer: jobDetails[0],
+              fee: formatEther(jobDetails[1]), // Convert from wei
+              metadata
+            });
+          } catch (err) {
+            console.warn(`Error fetching metadata for job ${jobId}:`, err);
+          }
         }
-
+        
+        console.log(`Found ${activeJobs.length} active jobs`);
         setJobs(activeJobs);
       } catch (err) {
-        console.error("Failed to fetch jobs:", err);
+        console.error("Failed to process job data:", err);
         setError("Failed to load marketplace data");
       } finally {
         setLoading(false);
       }
     };
-
-    fetchJobs();
-  }, [jobIds]);
+    
+    fetchJobsMetadata();
+  }, [jobsData, jobIds]);
 
   const convertIpfsUrl = (url: string) => {
     if (url.startsWith("ipfs://")) {
@@ -178,8 +212,7 @@ export default function MarketplacePage() {
       </div>
 
       {loading ? (
-        <SkeletonGrid count={6} />
-      ) : jobs.length === 0 ? (
+        <SkeletonGrid count={6} />      ) : jobs.length === 0 ? (
         <div className="text-center py-12">
           <h2 className="text-xl font-semibold text-gray-700 mb-2">
             No active jobs found
@@ -191,7 +224,8 @@ export default function MarketplacePage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {jobs.map((job) => (
-            <JobCard key={job.id} job={job} />
+            // @ts-ignore - key is a special React prop that doesn't need to be part of the component props interface
+            <JobCard key={job.id.toString()} job={job} />
           ))}
         </div>
       )}
