@@ -1,433 +1,158 @@
 'use client';
-
-import { useState, useEffect } from 'react';
-import React from 'react';
+import { useState } from 'react';
 import { 
   useWriteContract, 
   useWaitForTransactionReceipt, 
   useReadContract,
   useAccount
 } from 'wagmi';
-import { Briefcase, Wallet, CheckCircle, AlertCircle, ExternalLink, Zap } from 'lucide-react';
-
-// Import type extension
-import '@/lib/lucide-types';
-
-import { jobMarketplaceAbi, jobMarketplaceAddress } from '@/abis/abi';
 import { repTokenAbi, repTokenAddress } from '@/abis/abi';
+import { parseEther, formatEther } from 'viem';
 
-// Define job details interface
-interface JobDetails {
-  0: string; // creator
-  1: bigint; // fee
-  2: string; // ipfsHash
-  3: number; // status
-  [key: number]: string | bigint | number;
-}
-
-const Index = () => {
-  const [jobId, setJobId] = useState<string>('');
-  const [requiresApproval, setRequiresApproval] = useState<boolean>(false);
-  const { address } = useAccount();
+export default function RepExchange() {
+  const { address, isConnected } = useAccount();
+  const [buyAmount, setBuyAmount] = useState('');
+  const [sellAmount, setSellAmount] = useState('');
   
-  // Read job details
-  const { 
-    data: jobDetails, 
-    refetch: refetchJobDetails,
-    isError: jobDetailsError
-  } = useReadContract({
-    address: jobMarketplaceAddress,
-    abi: jobMarketplaceAbi,
-    functionName: 'getJobDetails',
-    args: [BigInt(jobId || "0")],
-    query: { 
-      enabled: !!jobId && !!address,
-      retry: 1
-    }
-  });
-
-  // Read user REP balance
-  const { 
-    data: repBalance, 
-    refetch: refetchRepBalance 
-  } = useReadContract({
+  // Read user's REP balance
+  const { data: balance, refetch } = useReadContract({
     address: repTokenAddress,
     abi: repTokenAbi,
     functionName: 'balanceOf',
-    args: [address!],
-    query: { enabled: !!address }
-  }) as { data: bigint | undefined, refetch: () => void };
+    args: [address],
+    query: { enabled: isConnected }
+  });
 
-  // Read REP token allowance
-  const { 
-    data: repAllowance,
-    refetch: refetchRepAllowance 
-  } = useReadContract({
+  // Read contract pause status
+  const { data: isPaused } = useReadContract({
     address: repTokenAddress,
     abi: repTokenAbi,
-    functionName: 'allowance',
-    args: [address!, jobMarketplaceAddress],
-    query: { enabled: !!address }
-  }) as { data: bigint | undefined, refetch: () => void };
-
-  // Calculate required stake
-  const calculateStake = () => {
-    if (!jobDetails) return BigInt(0);
-    const typedJobDetails = jobDetails as unknown as JobDetails;
-    return (typedJobDetails[1] * BigInt(10)) / BigInt(100);
-  };
-
-  const requiredStake = jobDetails ? calculateStake() : BigInt(0);
-  const hasSufficientBalance = repBalance ? repBalance >= requiredStake : false;
-  const hasSufficientAllowance = repAllowance ? repAllowance >= requiredStake : false;
-
-  // Update approval requirement
-  useEffect(() => {
-    if (requiredStake > BigInt(0)) {
-      setRequiresApproval(!hasSufficientAllowance);
-    } else {
-      setRequiresApproval(false);
-    }
-  }, [requiredStake, hasSufficientAllowance]);
-
-  // Write contract calls
-  const { 
-    data: txHash,
-    error: writeError,
-    isPending: isWriting,
-    writeContract 
-  } = useWriteContract();
-
-  const { 
-    data: approvalTxHash,
-    error: approvalWriteError,
-    isPending: isApproving,
-    writeContract: writeApprovalContract 
-  } = useWriteContract();
-
-  // Transaction confirmations
-  const { 
-    isLoading: isConfirming, 
-    isSuccess: isConfirmed, 
-    error: txError 
-  } = useWaitForTransactionReceipt({ 
-    hash: txHash 
+    functionName: 'paused'
   });
 
+  // Buy transaction
   const { 
-    isLoading: isApprovalConfirming, 
-    isSuccess: isApprovalConfirmed, 
-    error: approvalTxError 
-  } = useWaitForTransactionReceipt({ 
-    hash: approvalTxHash 
-  });
+    data: buyHash,
+    writeContract: buyRep,
+    isPending: isBuyLoading,
+    error: buyError
+  } = useWriteContract();
+  
+  const { isLoading: isBuyConfirming, isSuccess: isBuySuccess } = 
+    useWaitForTransactionReceipt({ hash: buyHash });
 
-  // Handle REP token approval
-  const handleApprove = async () => {
-    if (!jobId || requiredStake === BigInt(0)) return;
+  // Sell transaction
+  const { 
+    data: sellHash,
+    writeContract: sellRep,
+    isPending: isSellLoading,
+    error: sellError
+  } = useWriteContract();
+  
+  const { isLoading: isSellConfirming, isSuccess: isSellSuccess } = 
+    useWaitForTransactionReceipt({ hash: sellHash });
+
+  const handleBuy = () => {
+    if (!buyAmount) return;
+    const value = parseEther(buyAmount);
     
-    writeApprovalContract({
+    buyRep({
       address: repTokenAddress,
       abi: repTokenAbi,
-      functionName: 'approve',
-      args: [jobMarketplaceAddress, requiredStake],
+      functionName: 'buy',
+      value
     });
   };
 
-  // Handle job application
-  const handleApply = async () => {
-    if (!jobId) return;
+  const handleSell = () => {
+    if (!sellAmount) return;
+    const repAmount = parseEther(sellAmount);
     
-    writeContract({
-      address: jobMarketplaceAddress,
-      abi: jobMarketplaceAbi,
-      functionName: 'applyToJob',
-      args: [BigInt(jobId)],
+    sellRep({
+      address: repTokenAddress,
+      abi: repTokenAbi,
+      functionName: 'sell',
+      args: [repAmount]
     });
   };
 
-  // Refresh data after successful approval
-  useEffect(() => {
-    if (isApprovalConfirmed) {
-      refetchRepAllowance();
-    }
-  }, [isApprovalConfirmed]);
-
-  // Refresh data after successful application
-  useEffect(() => {
-    if (isConfirmed) {
-      refetchRepBalance();
-      refetchJobDetails();
-    }
-  }, [isConfirmed]);
-
-  // Debug function to identify the reason button is disabled
-  const getDisabledReason = () => {
-    if (isWriting) return "Transaction is being written";
-    if (isConfirming) return "Transaction is being confirmed";
-    if (!hasSufficientBalance) return "Insufficient REP balance";
-    if (!jobId) return "No Job ID entered";
-    if (requiresApproval) return "REP token approval required";
-    if (jobDetails) {
-      const status = Number((jobDetails as unknown as JobDetails)[3]);
-      if (status !== 0) return `Job is not active (Status: ${status})`;
-    }
-    return "Button should be enabled";
-  };
+  // Refresh balance after successful transactions
+  if (isBuySuccess || isSellSuccess) {
+    refetch();
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 flex items-center justify-center p-4">
-      {/* Background Effects */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-      </div>
-
-      <div className="relative max-w-2xl w-full">
-        {/* Main Card */}
-        <div className="backdrop-blur-xl bg-slate-800/40 border border-slate-700/50 rounded-2xl shadow-2xl p-8">
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-8">
-            <div className="p-3 bg-gradient-to-br from-cyan-500/20 to-purple-500/20 rounded-xl border border-cyan-500/30">
-              <Briefcase className="w-6 h-6 text-cyan-400" />
-            </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
-              Apply to Job
-            </h1>
-          </div>
-
-          {/* Job ID Input */}
-          <div className="mb-6">
-            <label className="block text-slate-300 text-sm font-medium mb-3">
-              Job ID
-            </label>
-            <div className="relative">              <input
-                type="text"
-                value={jobId}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setJobId(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all duration-300"
-                placeholder="Enter Job ID"
-              />
-              <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500/10 to-purple-500/10 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-            </div>
-          </div>
-
-          {/* Error Message */}
-          {jobDetailsError && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-red-400" />
-                <span className="text-red-300">Invalid Job ID or job doesn't exist</span>
-              </div>
-            </div>
-          )}
-
-          {/* Job Details */}
-          {jobDetails && (
-            <div className="mb-6 p-6 bg-slate-800/30 border border-slate-600/30 rounded-xl">
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <Zap className="w-5 h-5 text-cyan-400" />
-                Job Details
-              </h2>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Fee:</span>
-                  <span className="text-cyan-400 font-mono">{(jobDetails as unknown as JobDetails)[1].toString()} REP</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Required Stake:</span>
-                  <span className="text-purple-400 font-mono">{requiredStake.toString()} REP</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Status:</span>
-                  <div className="flex items-center gap-2">
-                    {Number((jobDetails as unknown as JobDetails)[3]) === 0 ? (
-                      <>
-                        <CheckCircle className="w-4 h-4 text-green-400" />
-                        <span className="text-green-400">Active</span>
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="w-4 h-4 text-red-400" />
-                        <span className="text-red-400">Not Active</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Balance Info */}
-          {repBalance !== undefined && (
-            <div className="mb-6 p-4 bg-slate-800/20 border border-slate-600/20 rounded-xl">
-              <div className="flex items-center gap-2 mb-2">
-                <Wallet className="w-5 h-5 text-slate-400" />
-                <span className="text-slate-300">Your REP Balance: </span>
-                <span className="text-cyan-400 font-mono">{repBalance ? repBalance.toString() : '0'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {hasSufficientBalance ? (
-                  <>
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-green-400">Sufficient balance</span>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle className="w-4 h-4 text-red-400" />
-                    <span className="text-red-400">Insufficient REP balance</span>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Approval Section */}
-          {requiresApproval && (
-            <div className="mb-6">
-              <button
-                onClick={handleApprove}
-                disabled={isApproving || isApprovalConfirming}
-                className="w-full py-4 px-6 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 disabled:from-yellow-800 disabled:to-orange-800 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-[1.02] disabled:scale-100 disabled:cursor-not-allowed shadow-lg hover:shadow-yellow-500/25"
-              >
-                {isApproving ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Confirming approval in wallet...
-                  </div>
-                ) : isApprovalConfirming ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Processing approval...
-                  </div>
-                ) : (
-                  'Approve REP Tokens'
-                )}
-              </button>
-              
-              {isApprovalConfirmed && (
-                <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-green-300">Approval successful!</span>
-                  </div>
-                </div>
-              )}
-              
-              {(approvalWriteError || approvalTxError) && (
-                <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 text-red-400" />
-                    <span className="text-red-300">
-                      Approval error: {(approvalWriteError || approvalTxError)?.message}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Apply Button */}
+    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
+      <h1 className="text-2xl font-bold mb-6">REP Token Exchange</h1>
+      
+      {/* Buy Section */}
+      <div className="mb-8 p-4 border rounded-lg">
+        <h2 className="text-xl font-semibold mb-3">Buy REP Tokens</h2>
+        <div className="flex gap-2 mb-3">
+          <input
+            type="number"
+            value={buyAmount}
+            onChange={(e) => setBuyAmount(e.target.value)}
+            placeholder="ETH amount"
+            className="flex-1 p-2 border rounded"
+            disabled={isPaused as boolean}
+          />
           <button
-            onClick={handleApply}
-            disabled={Boolean(
-              isWriting || 
-              isConfirming || 
-              !hasSufficientBalance || 
-              !jobId || 
-              requiresApproval ||
-              (jobDetails && Number((jobDetails as unknown as JobDetails)[3]) !== 0)
-            )}
-            className="w-full py-4 px-6 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 disabled:from-slate-700 disabled:to-slate-600 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-[1.02] disabled:scale-100 disabled:cursor-not-allowed shadow-lg hover:shadow-cyan-500/25"
+            onClick={handleBuy}
+            disabled={isBuyLoading || isBuyConfirming || isPaused as boolean}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
           >
-            {isWriting ? (
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                Confirming in wallet...
-              </div>
-            ) : isConfirming ? (
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                Processing application...
-              </div>
-            ) : (
-              'Apply to Job'
-            )}
+            {isBuyLoading || isBuyConfirming ? 'Processing...' : 'Buy'}
           </button>
-
-          {/* Success Message */}
-          {isConfirmed && (
-            <div className="mt-6 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
-              <div className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-400 mt-0.5" />
-                <div>
-                  <span className="text-green-300">Successfully applied to job!</span>
-                  <br />
-                  <span className="text-slate-400">Transaction: </span>
-                  <a 
-                    href={`https://sepolia.etherscan.io/tx/${txHash}`} 
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-cyan-400 hover:text-cyan-300 transition-colors inline-flex items-center gap-1"
-                  >
-                    View on Etherscan
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {(writeError || txError) && (
-            <div className="mt-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-red-400" />
-                <span className="text-red-300">
-                  Error: {(writeError || txError)?.message}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Debug Information */}
-          <div className="mt-6 p-4 bg-slate-900/30 border border-slate-700/30 rounded-xl">
-            <h3 className="text-sm font-medium text-slate-400 mb-3">Debug Information</h3>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Button Status:</span>
-                <span className="text-slate-300">{getDisabledReason()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Job ID:</span>
-                <span className="text-slate-300 font-mono">{jobId || "Not entered"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Job Status:</span>
-                <span className="text-slate-300">
-                  {jobDetails ? ((jobDetails as unknown as JobDetails)[3] === 0 ? "Active" : "Not Active") : "Unknown"}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Balance:</span>
-                <span className="text-slate-300 font-mono">{repBalance?.toString() || "0"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Required Stake:</span>
-                <span className="text-slate-300 font-mono">{requiredStake.toString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Allowance:</span>
-                <span className="text-slate-300 font-mono">{repAllowance?.toString() || "0"}</span>
-              </div>              <div className="flex justify-between">
-                <span className="text-slate-500">Requires Approval:</span>
-                <span className="text-slate-300">{requiresApproval ? "Yes" : "No"}</span>
-              </div>
-            </div>
-          </div>
         </div>
+        {buyError && (
+          <p className="text-red-500">Error: {buyError.message}</p>
+        )}
+        {isBuySuccess && (
+          <p className="text-green-500">Successfully purchased REP tokens!</p>
+        )}
       </div>
-    </div>  );
-};
 
-export default Index;
+      {/* Sell Section */}
+      <div className="mb-8 p-4 border rounded-lg">
+        <h2 className="text-xl font-semibold mb-3">Sell REP Tokens</h2>
+        <div className="flex gap-2 mb-3">
+          <input
+            type="number"
+            value={sellAmount}
+            onChange={(e) => setSellAmount(e.target.value)}
+            placeholder="REP amount"
+            className="flex-1 p-2 border rounded"
+            disabled={isPaused as boolean}
+          />
+          <button
+            onClick={handleSell}
+            disabled={isSellLoading || isSellConfirming || isPaused as boolean}
+            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 disabled:bg-gray-400"
+          >
+            {isSellLoading || isSellConfirming ? 'Processing...' : 'Sell'}
+          </button>
+        </div>
+        {sellError && (
+          <p className="text-red-500">Error: {sellError.message}</p>
+        )}
+        {isSellSuccess && (
+          <p className="text-green-500">Successfully sold REP tokens!</p>
+        )}
+      </div>
+
+      {/* Balance Display */}
+      <div className="p-4 bg-gray-50 rounded-lg">
+        <h2 className="text-xl font-semibold mb-2">Your Balance</h2>
+        <p className="text-lg">
+          {balance !== undefined 
+            ? `${formatEther(balance as bigint)} REP` 
+            : 'Loading...'}
+        </p>
+        {isPaused && (
+          <p className="text-red-500 mt-2">Contract is currently paused</p>
+        )}
+      </div>
+    </div>
+  );
+}
