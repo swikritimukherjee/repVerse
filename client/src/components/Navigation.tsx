@@ -19,6 +19,21 @@ const Navigation = () => {
   const pathname = usePathname();
   const { address, isConnected } = useAccount();
   const config = useConfig();
+  
+  // Add the diagonalGradient animation keyframes
+  const keyframes = `
+    @keyframes diagonalGradient {
+      0% {
+        background-position: 0% 0%;
+      }
+      50% {
+        background-position: 100% 100%;
+      }
+      100% {
+        background-position: 0% 0%;
+      }
+    }
+  `;
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: TrendingUp },
@@ -67,18 +82,37 @@ const Navigation = () => {
   }, [balanceData]);
 
   const isActive = (href: string) => pathname === href;
-
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass-nav shadow-2xl">
+      <style dangerouslySetInnerHTML={{ __html: keyframes }} />
       <div className="max-w-full mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center">
-            <Link href="/" className="flex-shrink-0 flex items-center space-x-5 group">
+          <div className="flex items-center">          <Link href="/" className="flex-shrink-0 flex items-center space-x-3 group">
               <div className="w-8 h-8 bg-gradient-to-r from-neon-cyan to-neon-pink rounded-lg flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300">
-                <Shield className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-semibold text-white tracking-tight">De-Folio</span>
+              <div className="flex items-center">
+                <span className="text-xl font-semibold text-white tracking-tight">rep</span>
+                {/* "V" with animated gradient only on the letter */}
+                <span
+                  style={{
+                    display: 'inline-block',
+                    background: 'linear-gradient(45deg,#BE185D, #c084fc, #93C5FD)',
+                    backgroundSize: '300% 300%',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    color: 'transparent',
+                    animation: 'diagonalGradient 6s ease-in-out infinite',
+                    padding: "0px 1px",
+                    margin: "0 -1px",
+                    fontSize: "1.25rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  V
+                </span>
+                <span className="text-xl font-semibold text-white tracking-tight">erse</span>
+              </div>
             </Link>
           </div>
 
@@ -183,10 +217,32 @@ const Navigation = () => {
         </div>
       </div>
 
-      {/* Mobile Navigation Menu */}
+    {/* Mobile Navigation Menu */}
       {isMenuOpen && (
         <div className="md:hidden">
           <div className="px-4 pt-2 pb-3 space-y-1 glass-card mx-4 mt-2 border-glow shadow-2xl">
+            {/* Add mobile logo at top of menu */}
+            <div className="flex items-center justify-center py-3 mb-2 border-b border-neon-cyan/30">
+              <span className="text-xl font-semibold text-white tracking-tight">rep</span>
+              <span
+                style={{
+                  display: 'inline-block',
+                  background: 'linear-gradient(45deg,#BE185D, #c084fc, #93C5FD)',
+                  backgroundSize: '300% 300%',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  color: 'transparent',
+                  animation: 'diagonalGradient 6s ease-in-out infinite',
+                  padding: "0px 1px",
+                  margin: "0 -1px",
+                  fontSize: "1.25rem",
+                  fontWeight: 600,
+                }}
+              >
+                V
+              </span>
+              <span className="text-xl font-semibold text-white tracking-tight">erse</span>
+            </div>
             {navItems.map((item) => (
               <Link
                 key={item.name}
