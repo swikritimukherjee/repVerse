@@ -79,6 +79,8 @@ const HeroSection = () => {
       WebkitTextFillColor: 'transparent',
       color: 'transparent',
       animation: 'diagonalGradient 6s ease-in-out infinite',
+      padding: "1px 3px",  // Add 1px vertical, 3px horizontal padding
+      margin: "0 -2px",    // Compensate for extra width  
       
       
     }}
