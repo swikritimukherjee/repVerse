@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Wallet, Menu, X, Shield, Coins, TrendingUp, Users, Star, DollarSign } from 'lucide-react';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { repTokenAbi, repTokenAddress } from '@/abis/abi';
 import { useAccount, useConfig, useReadContract } from 'wagmi';
+import { formatUnits } from 'viem';
 
 // Function to shorten wallet address
 const shortenAddress = (address: string) => {
@@ -16,7 +17,6 @@ const shortenAddress = (address: string) => {
 
 const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [repBalance, setRepBalance] = useState<string>('0.00');
   const pathname = usePathname();
   const { address, isConnected } = useAccount();
   const config = useConfig();
@@ -32,32 +32,43 @@ const Navigation = () => {
   ];
 
   // Read REP token balance
-  const { data, error, isLoading, refetch } = useReadContract({
+  const { 
+    data: balanceData, 
+    error: balanceError, 
+    isLoading: isBalanceLoading, 
+    queryKey: balanceQueryKey
+  } = useReadContract({
     config,
     abi: repTokenAbi,
     address: repTokenAddress,
     functionName: 'balanceOf',
-    args: [address],
+    args: [address!],
+    query: {
+      enabled: !!address,
+      refetchInterval: 15000, // Refresh every 15 seconds
+    }
   });
 
-  // Format balance and handle loading states
-  useEffect(() => {
-    if (isConnected && data) {
-      const balance = Number(data) / 1e18;
-      setRepBalance(balance.toLocaleString('en-US', {
+  // Format balance
+  const repBalance = useMemo(() => {
+    if (!balanceData) return '0.00';
+    try {
+      const balance = formatUnits(balanceData, 18);
+      return Number(balance).toLocaleString('en-US', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
-      }));
-    } else {
-      setRepBalance('0.00');
+      });
+    } catch (e) {
+      console.error('Error formatting balance:', e);
+      return '0.00';
     }
-  }, [data, isConnected]);
+  }, [balanceData]);
 
   const isActive = (href: string) => pathname === href;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass-nav shadow-2xl">
-      <div className="max-w-full mx-auto px-10">
+      <div className="max-w-full mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex items-center">
@@ -82,9 +93,6 @@ const Navigation = () => {
                       : 'text-white hover:text-neon-cyan'
                   }`}
                 >
-                  {/* <item.icon
-                    className={`w-4 h-4 ${isActive(item.href) ? 'text-neon-cyan' : 'group-hover:text-neon-pink'} transition-colors`}
-                  /> */}
                   <span>{item.name}</span>
                 </Link>
               ))}
@@ -132,11 +140,17 @@ const Navigation = () => {
 
                       return (
                         <div className="flex items-center space-x-3">
-                          <div className="glass-card px-4 py-2 text-sm border-glow-green">
-                            <span className="text-muted-foreground">Balance:</span>
-                            <span className="ml-2 text-neon-green font-semibold neon-glow-green">
-                              {repBalance} $REP
-                            </span>
+                          <div className="glass-card px-4 py-2 text-sm border-glow-green flex items-center">
+                            {isBalanceLoading ? (
+                              <span className="animate-pulse">Loading...</span>
+                            ) : (
+                              <>
+                                <span className="text-muted-foreground">Balance:</span>
+                                <span className="ml-2 text-neon-green font-semibold neon-glow-green">
+                                  {repBalance} $REP
+                                </span>
+                              </>
+                            )}
                           </div>
                           <button 
                             onClick={openAccountModal}
@@ -226,12 +240,21 @@ const Navigation = () => {
 
                         return (
                           <div className="px-4 py-2 space-y-3">
-                            <div className="text-sm text-muted-foreground">
-                              Balance: <span className="text-neon-green font-semibold neon-glow-green">{repBalance} $REP</span>
+                            <div className="text-sm text-muted-foreground flex items-center">
+                              {isBalanceLoading ? (
+                                <span className="animate-pulse">Loading balance...</span>
+                              ) : (
+                                <>
+                                  Balance: 
+                                  <span className="ml-2 text-neon-green font-semibold neon-glow-green">
+                                    {repBalance} $REP
+                                  </span>
+                                </>
+                              )}
                             </div>
                             <button 
                               onClick={openAccountModal}
-                              className="text-sm text-neon-cyan neon-glow w-full text-left"
+                              className="text-sm text-neon-cyan neon-glow w-full text-left flex items-center"
                             >
                               {account.displayName || shortenAddress(account.address)}
                             </button>
