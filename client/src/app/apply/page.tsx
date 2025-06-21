@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, ChangeEvent } from 'react';
 import { 
   useWriteContract, 
   useWaitForTransactionReceipt, 
@@ -92,7 +92,7 @@ export default function RepExchange() {
           <input
             type="number"
             value={buyAmount}
-            onChange={(e) => setBuyAmount(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setBuyAmount(e.target.value)}
             placeholder="ETH amount"
             className="flex-1 p-2 border rounded"
             disabled={isPaused as boolean}
@@ -120,7 +120,7 @@ export default function RepExchange() {
           <input
             type="number"
             value={sellAmount}
-            onChange={(e) => setSellAmount(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setSellAmount(e.target.value)}
             placeholder="REP amount"
             className="flex-1 p-2 border rounded"
             disabled={isPaused as boolean}

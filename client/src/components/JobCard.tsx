@@ -23,13 +23,19 @@ export const JobCard = ({ job }: JobCardProps) => {
   
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow h-full flex flex-col">
-      <div className="relative h-48">
+    <div className="relative h-48">
         <Image
-          src={job.metadata.image}
+          src={job.metadata.image || "/placeholder-image.png"}
           alt={job.metadata.name}
           fill
           className="object-cover"
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+          onError={(e) => {
+            // Fallback to a placeholder image if the original fails to load
+            const target = e.target as HTMLImageElement;
+            target.onerror = null; // Prevent infinite loop
+            target.src = "/placeholder-image.png";
+          }}
         />
       </div>
       

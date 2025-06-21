@@ -133,19 +133,55 @@ export default function MarketplacePage() {
           }
           
           try {
-            // Fetch metadata
+            // Log the original URI for debugging
+            console.log(`Fetching metadata for job ${jobId} from: ${metadataURI}`);
+            const convertedUrl = convertIpfsUrl(metadataURI);
+            console.log(`Converted URL: ${convertedUrl}`);
+            
+            // Fetch metadata with 5 second timeout
             const { data: metadata } = await axios.get<JobMetadata>(
-              convertIpfsUrl(metadataURI)
+              convertedUrl,
+              { timeout: 5000 }
             );
+            
+            console.log(`Successfully fetched metadata for job ${jobId}:`, metadata);
+            
+            // Ensure we have valid metadata with required fields
+            if (!metadata || !metadata.name) {
+              console.warn(`Invalid metadata format for job ${jobId}`);
+              continue; // Skip this job
+            }
             
             activeJobs.push({
               id: jobId,
               employer: jobDetails[0],
               fee: formatEther(jobDetails[1]), // Convert from wei
-              metadata
+              metadata: {
+                ...metadata,
+                name: metadata.name || `Job #${jobId}`,
+                description: metadata.description || "No description provided.",
+                image: metadata.image || '/placeholder-image.png',
+                attributes: metadata.attributes || []
+              }
             });
           } catch (err) {
-            console.warn(`Error fetching metadata for job ${jobId}:`, err);
+            console.error(`Error fetching metadata for job ${jobId}:`, err);
+            
+            // Add placeholder job data when metadata can't be fetched
+            activeJobs.push({
+              id: jobId,
+              employer: jobDetails[0],
+              fee: formatEther(jobDetails[1]), // Convert from wei
+              metadata: {
+                name: `Job #${jobId}`,
+                description: "Unable to load job details. Please try again later.",
+                image: '/placeholder-image.png',
+                attributes: [
+                  { trait_type: "Status", value: "Active" },
+                  { trait_type: "Budget", value: "Unknown" }
+                ]
+              }
+            });
           }
         }
         
@@ -163,8 +199,15 @@ export default function MarketplacePage() {
   }, [jobsData, jobIds]);
 
   const convertIpfsUrl = (url: string) => {
+    if (!url) return '';
+    
     if (url.startsWith("ipfs://")) {
-      return `https://ipfs.io/ipfs/${url.replace("ipfs://", "")}`;
+      // Use multiple gateways for better reliability
+      // Try Cloudflare's gateway first, then fallback to others
+      return `https://cloudflare-ipfs.com/ipfs/${url.replace("ipfs://", "")}`;
+      // Alternative gateways if needed:
+      // return `https://ipfs.io/ipfs/${url.replace("ipfs://", "")}`;
+      // return `https://gateway.pinata.cloud/ipfs/${url.replace("ipfs://", "")}`;
     }
     return url;
   };
@@ -224,7 +267,6 @@ export default function MarketplacePage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {jobs.map((job) => (
-            // @ts-ignore - key is a special React prop that doesn't need to be part of the component props interface
             <JobCard key={job.id.toString()} job={job} />
           ))}
         </div>
