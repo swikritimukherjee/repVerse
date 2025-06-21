@@ -7,8 +7,13 @@ import {
   useReadContract,
   useAccount
 } from 'wagmi';
-import { jobMarketplaceAbi, jobMarketplaceAddress } from '@/abis/abi';
-import { repTokenAbi, repTokenAddress } from '@/abis/abi';
+import { Briefcase, Wallet, CheckCircle, AlertCircle, ExternalLink, Zap } from 'lucide-react';
+
+// Mock ABI addresses for demonstration - replace with your actual imports
+const jobMarketplaceAddress = "0x123..."; // Replace with actual address
+const repTokenAddress = "0x456..."; // Replace with actual address
+const jobMarketplaceAbi = []; // Replace with actual ABI
+const repTokenAbi = []; // Replace with actual ABI
 
 // Define job details interface
 interface JobDetails {
@@ -19,7 +24,7 @@ interface JobDetails {
   [key: number]: string | bigint | number;
 }
 
-export default function ApplyToJob() {
+const Index = () => {
   const [jobId, setJobId] = useState<string>('');
   const [requiresApproval, setRequiresApproval] = useState<boolean>(false);
   const { address } = useAccount();
@@ -39,6 +44,7 @@ export default function ApplyToJob() {
       retry: 1
     }
   });
+
   // Read user REP balance
   const { 
     data: repBalance, 
@@ -62,13 +68,14 @@ export default function ApplyToJob() {
     args: [address!, jobMarketplaceAddress],
     query: { enabled: !!address }
   }) as { data: bigint | undefined, refetch: () => void };
+
   // Calculate required stake
   const calculateStake = () => {
     if (!jobDetails) return BigInt(0);
-    // Cast job details to the expected structure
     const typedJobDetails = jobDetails as unknown as JobDetails;
     return (typedJobDetails[1] * BigInt(10)) / BigInt(100);
   };
+
   const requiredStake = jobDetails ? calculateStake() : BigInt(0);
   const hasSufficientBalance = repBalance ? repBalance >= requiredStake : false;
   const hasSufficientAllowance = repAllowance ? repAllowance >= requiredStake : false;
@@ -152,6 +159,7 @@ export default function ApplyToJob() {
       refetchJobDetails();
     }
   }, [isConfirmed]);
+
   // Debug function to identify the reason button is disabled
   const getDisabledReason = () => {
     if (isWriting) return "Transaction is being written";
@@ -167,119 +175,252 @@ export default function ApplyToJob() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h1 className="text-2xl font-bold mb-6">Apply to Job</h1>
-      
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-2">Job ID</label>
-        <input
-          type="text"
-          value={jobId}
-          onChange={(e) => setJobId(e.target.value)}
-          className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Enter Job ID"
-        />
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 flex items-center justify-center p-4">
+      {/* Background Effects */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
       </div>
 
-      {jobDetailsError && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
-          Error: Invalid Job ID or job doesn't exist
-        </div>
-      )}      {jobDetails ? (
-        <div className="mb-6 p-4 bg-gray-50 rounded-md">
-          <h2 className="text-xl font-semibold mb-2">Job Details</h2>
-          <p>Fee: {(jobDetails as unknown as JobDetails)[1].toString()} REP</p>
-          <p>Required Stake: {requiredStake.toString()} REP</p>
-          <p>Status: {Number((jobDetails as unknown as JobDetails)[3]) === 0 ? '✅ Active' : '❌ Not Active'} (status code: {Number((jobDetails as unknown as JobDetails)[3])})</p>
-        </div>
-      ) : null}      {repBalance !== undefined && (
-        <div className="mb-4">
-          <p>Your REP Balance: {repBalance ? repBalance.toString() : '0'}</p>
-          <p className={!hasSufficientBalance ? 'text-red-500' : ''}>
-            {hasSufficientBalance 
-              ? '✅ Sufficient balance' 
-              : '❌ Insufficient REP balance'}
-          </p>
-        </div>
-      )}
+      <div className="relative max-w-2xl w-full">
+        {/* Main Card */}
+        <div className="backdrop-blur-xl bg-slate-800/40 border border-slate-700/50 rounded-2xl shadow-2xl p-8">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-8">
+            <div className="p-3 bg-gradient-to-br from-cyan-500/20 to-purple-500/20 rounded-xl border border-cyan-500/30">
+              <Briefcase className="w-6 h-6 text-cyan-400" />
+            </div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+              Apply to Job
+            </h1>
+          </div>
 
-      {requiresApproval && (
-        <div className="mb-4">
-          <button
-            onClick={handleApprove}
-            disabled={isApproving || isApprovalConfirming}
-            className={`w-full py-3 px-4 rounded-md text-white font-medium mb-3 ${
-              isApproving || isApprovalConfirming
-                ? 'bg-yellow-500 cursor-not-allowed'
-                : 'bg-yellow-600 hover:bg-yellow-700'
-            }`}
-          >
-            {isApproving ? 'Confirming approval in wallet...' : 
-             isApprovalConfirming ? 'Processing approval...' : 
-             'Approve REP Tokens'}
-          </button>
-          
-          {isApprovalConfirmed && (
-            <div className="mt-2 p-2 bg-green-100 text-green-700 rounded-md text-center">
-              ✅ Approval successful!
+          {/* Job ID Input */}
+          <div className="mb-6">
+            <label className="block text-slate-300 text-sm font-medium mb-3">
+              Job ID
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={jobId}
+                onChange={(e) => setJobId(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all duration-300"
+                placeholder="Enter Job ID"
+              />
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500/10 to-purple-500/10 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+            </div>
+          </div>
+
+          {/* Error Message */}
+          {jobDetailsError && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-400" />
+                <span className="text-red-300">Invalid Job ID or job doesn't exist</span>
+              </div>
             </div>
           )}
-          
-          {approvalWriteError || approvalTxError ? (
-            <div className="mt-2 p-2 bg-red-100 text-red-700 rounded-md">
-              Approval error: {(approvalWriteError || approvalTxError)?.message}
+
+          {/* Job Details */}
+          {jobDetails && (
+            <div className="mb-6 p-6 bg-slate-800/30 border border-slate-600/30 rounded-xl">
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <Zap className="w-5 h-5 text-cyan-400" />
+                Job Details
+              </h2>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Fee:</span>
+                  <span className="text-cyan-400 font-mono">{(jobDetails as unknown as JobDetails)[1].toString()} REP</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Required Stake:</span>
+                  <span className="text-purple-400 font-mono">{requiredStake.toString()} REP</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Status:</span>
+                  <div className="flex items-center gap-2">
+                    {Number((jobDetails as unknown as JobDetails)[3]) === 0 ? (
+                      <>
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                        <span className="text-green-400">Active</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-4 h-4 text-red-400" />
+                        <span className="text-red-400">Not Active</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-          ) : null}
-        </div>
-      )}      <button
-        onClick={handleApply}
-        disabled={Boolean(
-          isWriting || 
-          isConfirming || 
-          !hasSufficientBalance || 
-          !jobId || 
-          requiresApproval ||
-          (jobDetails && Number((jobDetails as unknown as JobDetails)[3]) !== 0) // Status not active
-        )}
-        className={`w-full py-3 px-4 rounded-md text-white font-medium ${
-          isWriting || isConfirming || !hasSufficientBalance || !jobId || requiresApproval || (jobDetails && Number((jobDetails as unknown as JobDetails)[3]) !== 0)
-            ? 'bg-gray-400 cursor-not-allowed'
-            : 'bg-blue-600 hover:bg-blue-700'
-        }`}
-      >
-        {isWriting ? 'Confirming in wallet...' : 
-         isConfirming ? 'Processing application...' : 
-         'Apply to Job'}
-      </button>
+          )}
 
-      {isConfirmed && (
-        <div className="mt-4 p-3 bg-green-100 text-green-700 rounded-md">
-          ✅ Successfully applied to job! Transaction: 
-          <a 
-            href={`https://sepolia.etherscan.io/tx/${txHash}`} 
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline ml-1"
+          {/* Balance Info */}
+          {repBalance !== undefined && (
+            <div className="mb-6 p-4 bg-slate-800/20 border border-slate-600/20 rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <Wallet className="w-5 h-5 text-slate-400" />
+                <span className="text-slate-300">Your REP Balance: </span>
+                <span className="text-cyan-400 font-mono">{repBalance ? repBalance.toString() : '0'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasSufficientBalance ? (
+                  <>
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-green-400">Sufficient balance</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="w-4 h-4 text-red-400" />
+                    <span className="text-red-400">Insufficient REP balance</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Approval Section */}
+          {requiresApproval && (
+            <div className="mb-6">
+              <button
+                onClick={handleApprove}
+                disabled={isApproving || isApprovalConfirming}
+                className="w-full py-4 px-6 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 disabled:from-yellow-800 disabled:to-orange-800 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-[1.02] disabled:scale-100 disabled:cursor-not-allowed shadow-lg hover:shadow-yellow-500/25"
+              >
+                {isApproving ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Confirming approval in wallet...
+                  </div>
+                ) : isApprovalConfirming ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Processing approval...
+                  </div>
+                ) : (
+                  'Approve REP Tokens'
+                )}
+              </button>
+              
+              {isApprovalConfirmed && (
+                <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-green-300">Approval successful!</span>
+                  </div>
+                </div>
+              )}
+              
+              {(approvalWriteError || approvalTxError) && (
+                <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-400" />
+                    <span className="text-red-300">
+                      Approval error: {(approvalWriteError || approvalTxError)?.message}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Apply Button */}
+          <button
+            onClick={handleApply}
+            disabled={Boolean(
+              isWriting || 
+              isConfirming || 
+              !hasSufficientBalance || 
+              !jobId || 
+              requiresApproval ||
+              (jobDetails && Number((jobDetails as unknown as JobDetails)[3]) !== 0)
+            )}
+            className="w-full py-4 px-6 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 disabled:from-slate-700 disabled:to-slate-600 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-[1.02] disabled:scale-100 disabled:cursor-not-allowed shadow-lg hover:shadow-cyan-500/25"
           >
-            View on Etherscan
-          </a>
-        </div>
-      )}
+            {isWriting ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                Confirming in wallet...
+              </div>
+            ) : isConfirming ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                Processing application...
+              </div>
+            ) : (
+              'Apply to Job'
+            )}
+          </button>
 
-      {(writeError || txError) && (
-        <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-md">
-          Error: {(writeError || txError)?.message}
-        </div>
-      )}      {/* Debug information */}
-      <div className="mt-4 p-3 bg-gray-100 text-gray-700 rounded-md text-sm">
-        <p><strong>Button Disabled Reason:</strong> {getDisabledReason()}</p>
-        <p><strong>jobId:</strong> {jobId || "Not entered"}</p>
-        <p><strong>Job Status:</strong> {jobDetails ? ((jobDetails as unknown as JobDetails)[3] === 0 ? "Active" : "Not Active") : "Unknown"}</p>
-        <p><strong>Balance:</strong> {repBalance?.toString() || "0"}</p>
-        <p><strong>Required Stake:</strong> {requiredStake.toString()}</p>
-        <p><strong>Allowance:</strong> {repAllowance?.toString() || "0"}</p>
-        <p><strong>Requires Approval:</strong> {requiresApproval ? "Yes" : "No"}</p>
-      </div>
-    </div>
-  );
-}
+          {/* Success Message */}
+          {isConfirmed && (
+            <div className="mt-6 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-400 mt-0.5" />
+                <div>
+                  <span className="text-green-300">Successfully applied to job!</span>
+                  <br />
+                  <span className="text-slate-400">Transaction: </span>
+                  <a 
+                    href={`https://sepolia.etherscan.io/tx/${txHash}`} 
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-cyan-400 hover:text-cyan-300 transition-colors inline-flex items-center gap-1"
+                  >
+                    View on Etherscan
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {(writeError || txError) && (
+            <div className="mt-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-400" />
+                <span className="text-red-300">
+                  Error: {(writeError || txError)?.message}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Debug Information */}
+          <div className="mt-6 p-4 bg-slate-900/30 border border-slate-700/30 rounded-xl">
+            <h3 className="text-sm font-medium text-slate-400 mb-3">Debug Information</h3>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Button Status:</span>
+                <span className="text-slate-300">{getDisabledReason()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Job ID:</span>
+                <span className="text-slate-300 font-mono">{jobId || "Not entered"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Job Status:</span>
+                <span className="text-slate-300">
+                  {jobDetails ? ((jobDetails as unknown as JobDetails)[3] === 0 ? "Active" : "Not Active") : "Unknown"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Balance:</span>
+                <span className="text-slate-300 font-mono">{repBalance?.toString() || "0"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Required Stake:</span>
+                <span className="text-slate-300 font-mono">{requiredStake.toString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Allowance:</span>
+                <span className="text-slate-300 font-mono">{repAllowance?.toString() || "0"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Requires Approval:</span>
+                <span className="text-slate-300">{requiresApproval ? "Yes" : "No"}</span>
+              </div>
