@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import React from 'react';
 import { 
   useWriteContract, 
   useWaitForTransactionReceipt, 
@@ -9,11 +10,11 @@ import {
 } from 'wagmi';
 import { Briefcase, Wallet, CheckCircle, AlertCircle, ExternalLink, Zap } from 'lucide-react';
 
-// Mock ABI addresses for demonstration - replace with your actual imports
-const jobMarketplaceAddress = "0x123..."; // Replace with actual address
-const repTokenAddress = "0x456..."; // Replace with actual address
-const jobMarketplaceAbi = []; // Replace with actual ABI
-const repTokenAbi = []; // Replace with actual ABI
+// Import type extension
+import '@/lib/lucide-types';
+
+import { jobMarketplaceAbi, jobMarketplaceAddress } from '@/abis/abi';
+import { repTokenAbi, repTokenAddress } from '@/abis/abi';
 
 // Define job details interface
 interface JobDetails {
@@ -200,11 +201,10 @@ const Index = () => {
             <label className="block text-slate-300 text-sm font-medium mb-3">
               Job ID
             </label>
-            <div className="relative">
-              <input
+            <div className="relative">              <input
                 type="text"
                 value={jobId}
-                onChange={(e) => setJobId(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setJobId(e.target.value)}
                 className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all duration-300"
                 placeholder="Enter Job ID"
               />
@@ -419,8 +419,15 @@ const Index = () => {
               <div className="flex justify-between">
                 <span className="text-slate-500">Allowance:</span>
                 <span className="text-slate-300 font-mono">{repAllowance?.toString() || "0"}</span>
-              </div>
-              <div className="flex justify-between">
+              </div>              <div className="flex justify-between">
                 <span className="text-slate-500">Requires Approval:</span>
                 <span className="text-slate-300">{requiresApproval ? "Yes" : "No"}</span>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>  );
+};
+
+export default Index;
