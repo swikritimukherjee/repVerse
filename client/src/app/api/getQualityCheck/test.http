@@ -1,0 +1,72 @@
+ ### Test with plain text work
+POST http://localhost:3000/api/getQualityCheck
+Content-Type: application/json
+
+{
+  "work": "This is a sample work submission for quality check. It demonstrates basic text input.",
+  "jobDetails": {
+    "title": "Content Writing",
+    "description": "Write a clear and concise paragraph",
+    "requirements": ["Clear language", "No grammatical errors"],
+    "instructions": ["Keep it simple", "Be direct"]
+  },
+  "jobId": "123"
+}
+
+### Test with an image URL
+POST http://localhost:3000/api/getQualityCheck
+Content-Type: application/json
+
+{
+  "work": "https://ipfs.io/ipfs/bafkreicwqiuwlgsiccvlmei3bpztvvlpjdu3ofbfnq7twk7hvxxa64t2oq",
+  "jobDetails": {
+    "title": "Logo Design",
+    "description": "Create a professional logo",
+    "requirements": ["Clean design", "Professional look", "Scalable"],
+    "instructions": ["Use appropriate colors", "Ensure clarity at different sizes"]
+  },
+  "jobId": "456"
+}
+
+### Test with a text URL (like a GitHub raw file)
+POST http://localhost:3000/api/getQualityCheck
+Content-Type: application/json
+
+{
+  "work": "https://raw.githubusercontent.com/nodejs/node/master/README.md",
+  "jobDetails": {
+    "title": "Documentation Review",
+    "description": "Review technical documentation",
+    "requirements": ["Clear explanation", "Proper formatting"],
+    "instructions": ["Check for technical accuracy", "Verify links"]
+  },
+  "jobId": "789"
+}
+
+### Test with an invalid URL
+POST http://localhost:3000/api/getQualityCheck
+Content-Type: application/json
+
+{
+  "work": "https://invalid-url-that-does-not-exist.com/image.jpg",
+  "jobDetails": {
+    "title": "Test Invalid URL",
+    "description": "Testing error handling",
+    "requirements": ["Should handle gracefully"],
+    "instructions": ["Expect fallback behavior"]
+  },
+  "jobId": "101"
+}
+
+### Test with malformed JSON
+POST http://localhost:3000/api/getQualityCheck
+Content-Type: application/json
+
+{
+  "work": "Some text",
+  "jobDetails": {
+    "title": "Incomplete Job"
+    // Missing comma will cause JSON parse error
+    "description": "Testing error handling"
+  }
+}
