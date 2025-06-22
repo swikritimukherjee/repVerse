@@ -4,7 +4,7 @@ deploy:
 verify:
 
 	forge verify-contract \
-	0x7f6aD72530D0478c949fD223074F382D0C2D78ad \
+	0x6978b7e2bF7d55c40e442526Ce5054248cDa198E \
 	src/RepToken.sol:RepToken \
 	--verifier-url https://api.routescan.io/v2/network/testnet/evm/43113/etherscan \
 	--etherscan-api-key verifyContract \
@@ -14,7 +14,7 @@ verify:
 	--watch
 
 	forge verify-contract \
-	0x28Fe818711e35DB7eA9Bc883dEB1406F26b8c5c2 \
+	0x6d99669E3ce665C12F8F92E4E02ec2F445F8Be5A \
 	src/JobMarketplace.sol:JobMarketplace \
 	--verifier-url https://api.routescan.io/v2/network/testnet/evm/43113/etherscan \
 	--etherscan-api-key verifyContract \
