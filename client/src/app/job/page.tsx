@@ -21,10 +21,12 @@ import {
 } from '@/abis/abi';
 
 interface JobMetadata {
-  name: string;
+  title: string;
   description: string;
   image: string;
-  attributes: { trait_type: string; value: string }[];
+  requirements?: string[];
+  instructions?: string[];
+  attributes?: { trait_type: string; value: string }[];
 }
 
 interface JobData {
@@ -147,7 +149,7 @@ export default function MarketplacePage() {
             console.log(`Successfully fetched metadata for job ${jobId}:`, metadata);
             
             // Ensure we have valid metadata with required fields
-            if (!metadata || !metadata.name) {
+            if (!metadata || !metadata.title) {
               console.warn(`Invalid metadata format for job ${jobId}`);
               continue; // Skip this job
             }
@@ -158,9 +160,11 @@ export default function MarketplacePage() {
               fee: formatEther(jobDetails[1]), // Convert from wei
               metadata: {
                 ...metadata,
-                name: metadata.name || `Job #${jobId}`,
+                title: metadata.title || `Job #${jobId}`,
                 description: metadata.description || "No description provided.",
                 image: metadata.image || '/placeholder-image.png',
+                requirements: metadata.requirements || [],
+                instructions: metadata.instructions || [],
                 attributes: metadata.attributes || []
               }
             });
@@ -173,9 +177,11 @@ export default function MarketplacePage() {
               employer: jobDetails[0],
               fee: formatEther(jobDetails[1]), // Convert from wei
               metadata: {
-                name: `Job #${jobId}`,
+                title: `Job #${jobId}`,
                 description: "Unable to load job details. Please try again later.",
                 image: '/placeholder-image.png',
+                requirements: [],
+                instructions: [],
                 attributes: [
                   { trait_type: "Status", value: "Active" },
                   { trait_type: "Budget", value: "Unknown" }
@@ -221,7 +227,7 @@ export default function MarketplacePage() {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-12 text-center">
+      <section className="min-h-screen w-full pt-24 pb-12 flex flex-col px-4 sm:px-8 md:px-16 lg:px-24 xl:px-32 2xl:px-40">
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
           <p>{error}</p>
           <button 
@@ -231,22 +237,24 @@ export default function MarketplacePage() {
             Retry
           </button>
         </div>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12">
-      <div className="flex justify-between items-center mb-8">
+    <section className="min-h-screen w-full pt-24 pb-12 flex flex-col px-4 sm:px-8 md:px-16 lg:px-24 xl:px-32 2xl:px-40">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 sm:mb-12">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Job Marketplace</h1>
-          <p className="text-gray-600">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-4 bg-white bg-clip-text text-transparent">
+            Job Marketplace
+          </h1>
+          <p className="text-zinc-600 text-lg">
             Browse active job opportunities and apply using your REP tokens
           </p>
         </div>
         
         {address && (
-          <div className="bg-indigo-50 px-4 py-2 rounded-lg">
+          <div className="mt-4 md:mt-0 bg-indigo-50 px-4 py-2 rounded-lg">
             <p className="text-indigo-700 font-medium">
               Connected: {address.slice(0, 6)}...{address.slice(-4)}
             </p>
@@ -255,7 +263,15 @@ export default function MarketplacePage() {
       </div>
 
       {loading ? (
-        <SkeletonGrid count={6} />      ) : jobs.length === 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          {[1, 2, 3, 4, 5, 6].map((item) => (
+            <div
+              key={item}
+              className="group relative overflow-hidden rounded-lg border border-zinc-200 h-[400px] sm:h-[450px] animate-pulse bg-zinc-100"
+            />
+          ))}
+        </div>
+      ) : jobs.length === 0 ? (
         <div className="text-center py-12">
           <h2 className="text-xl font-semibold text-gray-700 mb-2">
             No active jobs found
@@ -265,12 +281,12 @@ export default function MarketplacePage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {jobs.map((job) => (
             <JobCard key={job.id.toString()} job={job} />
           ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }

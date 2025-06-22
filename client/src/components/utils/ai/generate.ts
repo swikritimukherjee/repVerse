@@ -3,12 +3,12 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import * as fs from "node:fs";
 import wav from 'wav';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDTH5jjua96R-W5SFYFk5SD7DfQJ1treNw';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
-export const generate = async (prompt: string, image?: File) => {
+export const generate = async (prompt: string) => {
     try {
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         const result = await model.generateContent(prompt);
         const response = result.response;
         const text = response.text();
@@ -19,14 +19,37 @@ export const generate = async (prompt: string, image?: File) => {
     }
 }
 
-export const generateImage = async (prompt: string) => {
+export const generateWithImage = async (prompt: string, image?: File) => {
+    const genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const imagePart = image
+      ? {
+          inlineData: {
+            mimeType: image.type,
+            data: Buffer.from(await image.arrayBuffer()).toString("base64"),
+          },
+        }
+      : null;
 
+    const contents = [imagePart, { text: prompt }].filter(Boolean) as any[];
+
+    const result = await genAI.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: contents
+    });
+    if (result.text) {
+        return result.text;
+    }
+    console.error(result);
+    console.error("No text in the response");
+    throw new Error("No text in the response");
+}
+
+export const generateImage = async (prompt: string): Promise<Blob> => {
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-  const contents =
-    prompt;
+  const contents = prompt;
 
-  // Set responseModalities to include "Image" so the model can generate  an image
+  // Set responseModalities to include "Image" so the model can generate an image
   const response = await ai.models.generateContent({
     model: "gemini-2.0-flash-preview-image-generation",
     contents: contents,
@@ -34,17 +57,19 @@ export const generateImage = async (prompt: string) => {
       responseModalities: [Modality.TEXT, Modality.IMAGE],
     },
   });
+
   for (const part of response.candidates?.[0]?.content?.parts || []) {
-    // Based on the part type, either show the text or save the image
+    // Based on the part type, either show the text or return the image as blob
     if (part.text) {
       console.log(part.text);
     } else if (part.inlineData) {
       const imageData = part.inlineData.data || '';
       const buffer = Buffer.from(imageData, "base64");
-      fs.writeFileSync("gemini-native-image.png", buffer);
-      console.log("Image saved as gemini-native-image.png");
+      return new Blob([buffer], { type: 'image/png' });
     }
   }
+  
+  throw new Error("No image generated in the response");
 }
 
 async function saveWaveFile(
@@ -101,3 +126,11 @@ async function generateAudio(prompt: string, characters: { name: string, voice: 
    await saveWaveFile(fileName, audioBuffer);
    return fileName;
 }
+
+// import path from 'path';
+
+// const imagePath = path.join(__dirname, 'gemini-native-image.png');
+// const imageBuffer = fs.readFileSync(imagePath);
+// const image = new File([imageBuffer], "image.png", { type: "image/png" });
+// const response = await generateWithImage("Describe the image", image);
+// console.log(response);

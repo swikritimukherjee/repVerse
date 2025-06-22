@@ -45,7 +45,7 @@ export const ApplyToJobButton = ({ jobId, fee }: { jobId: number, fee: string })
       <button
         onClick={handleApply}
         disabled={isPending || isConfirming || applying}
-        className={`w-full py-2 rounded-md transition-colors ${
+        className={`flex-grow py-2 rounded-md transition-colors ${
           isPending || isConfirming || applying
             ? 'bg-indigo-400 cursor-not-allowed'
             : 'bg-indigo-600 hover:bg-indigo-700'
@@ -56,12 +56,15 @@ export const ApplyToJobButton = ({ jobId, fee }: { jobId: number, fee: string })
       
       {writeError && (
         <p className="text-red-500 text-sm mt-2">
+          <br />
           Error: {writeError.message.split('(')[0]}
         </p>
       )}
       
       {isConfirmed && (
+        
         <p className="text-green-500 text-sm mt-2">
+          <br />
           Application submitted successfully!
         </p>
       )}
