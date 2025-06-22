@@ -37,23 +37,25 @@ interface JobDetails {
 const Dashboard = () => {
   const { address, isConnected } = useAccount();
   const { writeContract } = useWriteContract();
-  
+
 
   const [jobs, setJobs] = useState<JobDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [applicantBalances, setApplicantBalances] = useState<{[key: string]: string}>({});
-  const [submissionStatuses, setSubmissionStatuses] = useState<{[key: string]: {
-    hasSubmitted: boolean;
-    needsRevision: boolean;
-    status: string;
-    qualityScore?: number;
-    reviewScore?: number;
-    fixableScore?: number;
-    reassignScore?: number;
-    rejectionReason?: string;
-    retryCount: number;
-  }}>({});
+  const [applicantBalances, setApplicantBalances] = useState<{ [key: string]: string }>({});
+  const [submissionStatuses, setSubmissionStatuses] = useState<{
+    [key: string]: {
+      hasSubmitted: boolean;
+      needsRevision: boolean;
+      status: string;
+      qualityScore?: number;
+      reviewScore?: number;
+      fixableScore?: number;
+      reassignScore?: number;
+      rejectionReason?: string;
+      retryCount: number;
+    }
+  }>({});
   const [workSubmissionModal, setWorkSubmissionModal] = useState<{
     isOpen: boolean;
     jobId: string;
@@ -99,9 +101,9 @@ const Dashboard = () => {
   // Setup contract reads for job details, URIs, applications, and selected freelancers
   const contractsConfig = useMemo(() => {
     const configs: any[] = [];
-    
+
     if (jobIds.length === 0) return [];
-    
+
     // Set up contract reads for each job
     jobIds.forEach(id => {
       configs.push(
@@ -131,7 +133,7 @@ const Dashboard = () => {
         }
       );
     });
-    
+
     return configs;
   }, [jobIds]);
 
@@ -158,7 +160,7 @@ const Dashboard = () => {
   // Convert IPFS URL helper
   const convertIpfsUrl = (url: string) => {
     if (!url) return '';
-    
+
     if (url.startsWith("ipfs://")) {
       return `https://cloudflare-ipfs.com/ipfs/${url.replace("ipfs://", "")}`;
     }
@@ -172,33 +174,33 @@ const Dashboard = () => {
         setLoading(false);
         return;
       }
-      
+
       try {
         setLoading(true);
         const allJobs: JobDetails[] = [];
-        
+
         // Process data in groups of 4 (details, URI, applications, selectedFreelancers)
         for (let i = 0; i < jobsData.length; i += 4) {
-          const jobId = jobIds[Math.floor(i/4)];
+          const jobId = jobIds[Math.floor(i / 4)];
           const jobDetails = jobsData[i].result as any[];
-          const metadataURI = jobsData[i+1].result as string;
-          const applications = jobsData[i+2].result as string[];
-          const selectedFreelancers = jobsData[i+3].result as string[];
-          
+          const metadataURI = jobsData[i + 1].result as string;
+          const applications = jobsData[i + 2].result as string[];
+          const selectedFreelancers = jobsData[i + 3].result as string[];
+
           if (!jobDetails || !metadataURI) {
             console.log(`Job ${jobId}: missing details or metadata`);
             continue;
           }
-          
+
           let metadata: JobMetadata | undefined;
-          
+
           try {
             const convertedUrl = convertIpfsUrl(metadataURI);
             const { data: fetchedMetadata } = await axios.get<JobMetadata>(
               convertedUrl,
               { timeout: 5000 }
             );
-            
+
             metadata = {
               ...fetchedMetadata,
               title: fetchedMetadata.title || `Job #${jobId}`,
@@ -209,7 +211,7 @@ const Dashboard = () => {
             };
           } catch (err) {
             console.error(`Error fetching metadata for job ${jobId}:`, err);
-            
+
             metadata = {
               title: `Job #${jobId}`,
               description: "Unable to load job details. Please try again later.",
@@ -218,7 +220,7 @@ const Dashboard = () => {
               instructions: [],
             };
           }
-          
+
           allJobs.push({
             jobId: jobId,
             employer: jobDetails[0],
@@ -231,7 +233,7 @@ const Dashboard = () => {
             selectedFreelancers: selectedFreelancers || [],
           });
         }
-        
+
         console.log(`Processed ${allJobs.length} jobs`);
         setJobs(allJobs);
       } catch (err) {
@@ -241,7 +243,7 @@ const Dashboard = () => {
         setLoading(false);
       }
     };
-    
+
     fetchJobsMetadata();
   }, [jobsData, jobIds]);
 
@@ -323,7 +325,7 @@ const Dashboard = () => {
   // Open work submission modal
   const openWorkSubmissionModal = (job: JobDetails) => {
     if (!job.metadata) return;
-    
+
     setWorkSubmissionModal({
       isOpen: true,
       jobId: job.jobId.toString(),
@@ -339,11 +341,11 @@ const Dashboard = () => {
   // Open work review modal
   const openWorkReviewModal = async (job: JobDetails) => {
     if (!job.metadata) return;
-    
+
     try {
       const response = await fetch(`/api/getWorkSubmissions?jobId=${job.jobId}`);
       const result = await response.json();
-      
+
       if (result.success) {
         setWorkReviewModal({
           isOpen: true,
@@ -365,7 +367,7 @@ const Dashboard = () => {
   // Check if user has submitted work for a job
   const hasSubmittedWork = async (jobId: number): Promise<boolean> => {
     if (!address) return false;
-    
+
     try {
       const response = await fetch(`/api/getWorkSubmissions?jobId=${jobId}&freelancerAddress=${address}`);
       const result = await response.json();
@@ -391,7 +393,7 @@ const Dashboard = () => {
     try {
       const response = await fetch(`/api/getWorkSubmissions?jobId=${jobId}&freelancerAddress=${freelancerAddress}`);
       const result = await response.json();
-      
+
       if (result.success && result.submissions.length > 0) {
         const latestSubmission = result.submissions[0]; // Already sorted by submittedAt desc
         return {
@@ -406,7 +408,7 @@ const Dashboard = () => {
           retryCount: latestSubmission.retryCount
         };
       }
-      
+
       return {
         hasSubmitted: false,
         needsRevision: false,
@@ -437,19 +439,19 @@ const Dashboard = () => {
   // Load submission statuses for applied jobs
   const loadSubmissionStatuses = async () => {
     if (!address) return;
-    
-    const appliedJobs = jobs.filter(job => 
-      job.applications?.includes(address) && 
+
+    const appliedJobs = jobs.filter(job =>
+      job.applications?.includes(address) &&
       job.selectedFreelancers?.includes(address)
     );
-    
-    const statuses: {[key: string]: any} = {};
-    
+
+    const statuses: { [key: string]: any } = {};
+
     for (const job of appliedJobs) {
       const status = await getSubmissionStatus(job.jobId, address);
       statuses[job.jobId.toString()] = status;
     }
-    
+
     setSubmissionStatuses(statuses);
   };
 
@@ -555,27 +557,27 @@ const Dashboard = () => {
         </div>
 
         {/* Tabs */}
-                  <Tabs defaultValue="posted" className="mb-6">
-            <TabsList className="grid w-full grid-cols-3 bg-white/5 p-1">
-              <TabsTrigger 
-                value="posted" 
-                className="border-0 data-[state=active]:bg-rep-blue-600 data-[state=active]:text-white data-[state=active]:border data-[state=active]:border-white/10 text-muted-foreground data-[state=inactive]:border-0"
-              >
-                Jobs Posted ({categorizedJobs.posted.length})
-              </TabsTrigger>
-              <TabsTrigger 
-                value="applied" 
-                className="border-0 data-[state=active]:bg-rep-blue-600 data-[state=active]:text-white data-[state=active]:border data-[state=active]:border-white/10 text-muted-foreground data-[state=inactive]:border-0"
-              >
-                Applied Jobs ({categorizedJobs.applied.length})
-              </TabsTrigger>
-              <TabsTrigger 
-                value="completed" 
-                className="border-0 data-[state=active]:bg-rep-blue-600 data-[state=active]:text-white data-[state=active]:border data-[state=active]:border-white/10 text-muted-foreground data-[state=inactive]:border-0"
-              >
-                Completed ({categorizedJobs.completed.length})
-              </TabsTrigger>
-            </TabsList>
+        <Tabs defaultValue="posted" className="mb-6">
+          <TabsList className="grid w-full grid-cols-3 bg-white/5 p-1">
+            <TabsTrigger
+              value="posted"
+              className="border-0 data-[state=active]:bg-rep-blue-600 data-[state=active]:text-white data-[state=active]:border data-[state=active]:border-white/10 text-muted-foreground data-[state=inactive]:border-0"
+            >
+              Jobs Posted ({categorizedJobs.posted.length})
+            </TabsTrigger>
+            <TabsTrigger
+              value="applied"
+              className="border-0 data-[state=active]:bg-rep-blue-600 data-[state=active]:text-white data-[state=active]:border data-[state=active]:border-white/10 text-muted-foreground data-[state=inactive]:border-0"
+            >
+              Applied Jobs ({categorizedJobs.applied.length})
+            </TabsTrigger>
+            <TabsTrigger
+              value="completed"
+              className="border-0 data-[state=active]:bg-rep-blue-600 data-[state=active]:text-white data-[state=active]:border data-[state=active]:border-white/10 text-muted-foreground data-[state=inactive]:border-0"
+            >
+              Completed ({categorizedJobs.completed.length})
+            </TabsTrigger>
+          </TabsList>
 
           {/* Content */}
           {loading ? (
@@ -585,127 +587,127 @@ const Dashboard = () => {
           ) : (
             <>
               <TabsContent value="posted" className="space-y-6 mt-6">
-              <div className="space-y-6">
-                {categorizedJobs.posted.length === 0 ? (
-                  <div className="glass-card p-8 text-center">
-                    <Briefcase className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-white mb-2">No Jobs Posted</h3>
-                    <p className="text-muted-foreground mb-4">You haven't posted any jobs yet.</p>
-                    <Button className="bg-gradient-to-r from-rep-blue-600 to-rep-blue-700">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Post Your First Job
-                    </Button>
-                  </div>
-                ) : (
-                  categorizedJobs.posted.map((job) => (
-                    <div key={job.jobId} className="glass-card p-6">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h3 className="text-xl font-semibold text-white mb-2">
-                            {job.metadata?.title || `Job #${job.jobId}`}
-                          </h3>
-                          <p className="text-muted-foreground mb-2">
-                            {job.metadata?.description || 'No description available'}
-                          </p>
-                          <div className="flex items-center space-x-4 text-sm">
-                            <span className={`${getStatusColor(job.status)} font-medium`}>
-                              {getStatusText(job.status)}
-                            </span>
-                            <span className="text-rep-blue-400">
-                              Fee: {parseFloat(formatEther(job.fee)).toFixed(2)} $REP
-                            </span>
-                            <span className="text-yellow-400">
-                              Total Staked: {parseFloat(formatEther(job.totalStaked)).toFixed(2)} $REP
-                            </span>
+                <div className="space-y-6">
+                  {categorizedJobs.posted.length === 0 ? (
+                    <div className="glass-card p-8 text-center">
+                      <Briefcase className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-white mb-2">No Jobs Posted</h3>
+                      <p className="text-muted-foreground mb-4">You haven't posted any jobs yet.</p>
+                      <Button className="bg-gradient-to-r from-rep-blue-600 to-rep-blue-700">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Post Your First Job
+                      </Button>
+                    </div>
+                  ) : (
+                    categorizedJobs.posted.slice().reverse().map((job) => (
+                      <div key={job.jobId} className="glass-card p-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h3 className="text-xl font-semibold text-white mb-2">
+                              {job.metadata?.title || `Job #${job.jobId}`}
+                            </h3>
+                            <p className="text-muted-foreground mb-2">
+                              {job.metadata?.description || 'No description available'}
+                            </p>
+                            <div className="flex items-center space-x-4 text-sm">
+                              <span className={`${getStatusColor(job.status)} font-medium`}>
+                                {getStatusText(job.status)}
+                              </span>
+                              <span className="text-rep-blue-400">
+                                Fee: {parseFloat(formatEther(job.fee)).toFixed(2)} $REP
+                              </span>
+                              <span className="text-yellow-400">
+                                Total Staked: {parseFloat(formatEther(job.totalStaked)).toFixed(2)} $REP
+                              </span>
+                            </div>
                           </div>
+                          {job.metadata?.image && (
+                            <Image
+                              src={job.metadata.image}
+                              alt="Job"
+                              width={360}
+                              height={360}
+                              className="w-32 h-32 rounded-lg object-cover"
+                              unoptimized
+                            />
+                          )}
                         </div>
-                        {job.metadata?.image && (
-                          <Image
-                            src={job.metadata.image}
-                            alt="Job"
-                            width={360}
-                            height={360}
-                            className="w-32 h-32 rounded-lg object-cover"
-                            unoptimized
-                          />
-                        )}
-                      </div>
 
-                      {/* Applications */}
-                      {job.applications && job.applications.length > 0 && (
-                        <div className="mt-4">
-                          <h4 className="text-lg font-medium text-white mb-3">
-                            Applications ({job.applications.length})
-                          </h4>
-                          <div className="space-y-3">
-                            {job.applications.map((applicant, index) => (
-                              <div key={index} className="border border-white/10 rounded-lg p-4">
-                                <div className="flex justify-between items-center">
-                                  <div>
-                                    <div className="text-white font-medium">
-                                      {applicant.slice(0, 6)}...{applicant.slice(-4)}
+                        {/* Applications */}
+                        {job.applications && job.applications.length > 0 && (
+                          <div className="mt-4">
+                            <h4 className="text-lg font-medium text-white mb-3">
+                              Applications ({job.applications.length})
+                            </h4>
+                            <div className="space-y-3">
+                              {job.applications.map((applicant, index) => (
+                                <div key={index} className="border border-white/10 rounded-lg p-4">
+                                  <div className="flex justify-between items-center">
+                                    <div>
+                                      <div className="text-white font-medium">
+                                        {applicant.slice(0, 6)}...{applicant.slice(-4)}
+                                      </div>
+                                      <div className="text-sm text-rep-blue-400">
+                                        REP Balance: {applicantBalances[applicant] || 'Loading...'} $REP
+                                      </div>
                                     </div>
-                                    <div className="text-sm text-rep-blue-400">
-                                      REP Balance: {applicantBalances[applicant] || 'Loading...'} $REP
+                                    <div className="flex space-x-2">
+                                      {job.status === 0 && !job.selectedFreelancers?.includes(applicant) && (
+                                        <Button
+                                          size="sm"
+                                          onClick={() => selectFreelancer(job.jobId, applicant)}
+                                          className="bg-gradient-to-r from-green-500 to-emerald-600"
+                                        >
+                                          Select
+                                        </Button>
+                                      )}
+                                      {job.selectedFreelancers?.includes(applicant) && (
+                                        <span className="text-green-400 text-sm font-medium">Selected</span>
+                                      )}
                                     </div>
-                                  </div>
-                                  <div className="flex space-x-2">
-                                    {job.status === 0 && !job.selectedFreelancers?.includes(applicant) && (
-                                      <Button
-                                        size="sm"
-                                        onClick={() => selectFreelancer(job.jobId, applicant)}
-                                        className="bg-gradient-to-r from-green-500 to-emerald-600"
-                                      >
-                                        Select
-                                      </Button>
-                                    )}
-                                    {job.selectedFreelancers?.includes(applicant) && (
-                                      <span className="text-green-400 text-sm font-medium">Selected</span>
-                                    )}
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {/* Actions */}
-                      {job.status === 1 && (
-                        <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
-                          <Button
-                            onClick={() => openWorkReviewModal(job)}
-                            className="bg-gradient-to-r from-blue-500 to-blue-600 mr-3"
-                          >
-                            <Eye className="w-4 h-4 mr-2" />
-                            Review Work
-                          </Button>
-                          <Button
-                            onClick={() => cancelJob(job.jobId)}
-                            variant="outline"
-                            className="border-red-400 text-red-400 hover:bg-red-400 hover:text-white"
-                          >
-                            <XCircle className="w-4 h-4 mr-2" />
-                            Cancel Job
-                          </Button>
-                        </div>
-                      )}
-                      
-                      {job.status === 0 && job.selectedFreelancers && job.selectedFreelancers.length === 0 && (
-                        <div className="mt-4 pt-4 border-t border-white/10">
-                          <Button
-                            onClick={() => cancelJob(job.jobId)}
-                            variant="outline"
-                            className="border-red-400 text-red-400 hover:bg-red-400 hover:text-white"
-                          >
-                            <XCircle className="w-4 h-4 mr-2" />
-                            Cancel Job
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
+                        {/* Actions */}
+                        {job.status === 1 && (
+                          <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                            <Button
+                              onClick={() => openWorkReviewModal(job)}
+                              className="bg-gradient-to-r from-blue-500 to-blue-600 mr-3"
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              Review Work
+                            </Button>
+                            <Button
+                              onClick={() => cancelJob(job.jobId)}
+                              variant="outline"
+                              className="border-red-400 text-red-400 hover:bg-red-400 hover:text-white"
+                            >
+                              <XCircle className="w-4 h-4 mr-2" />
+                              Cancel Job
+                            </Button>
+                          </div>
+                        )}
+
+                        {job.status === 0 && job.selectedFreelancers && job.selectedFreelancers.length === 0 && (
+                          <div className="mt-4 pt-4 border-t border-white/10">
+                            <Button
+                              onClick={() => cancelJob(job.jobId)}
+                              variant="outline"
+                              className="border-red-400 text-red-400 hover:bg-red-400 hover:text-white"
+                            >
+                              <XCircle className="w-4 h-4 mr-2" />
+                              Cancel Job
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </TabsContent>
 
@@ -748,7 +750,7 @@ const Dashboard = () => {
                                   <span className="text-yellow-400">Someone else was selected</span>
                                 )}
                               </div>
-                              
+
                               {/* Submission Status */}
                               {job.selectedFreelancers?.includes(address || '') && submissionStatus && (
                                 <div className="mt-3">
@@ -771,7 +773,7 @@ const Dashboard = () => {
                                           </span>
                                         )}
                                       </div>
-                                      
+
                                       {submissionStatus.reviewScore !== undefined && (
                                         <div className="flex space-x-2 text-xs">
                                           <span className="bg-white/10 px-2 py-1 rounded">
@@ -785,7 +787,7 @@ const Dashboard = () => {
                                           </span>
                                         </div>
                                       )}
-                                      
+
                                       {submissionStatus.rejectionReason && (
                                         <details className="text-xs">
                                           <summary className="text-orange-400 cursor-pointer hover:text-orange-300">
@@ -850,7 +852,7 @@ const Dashboard = () => {
                             <div className="text-sm text-muted-foreground">
                               Applied on: {new Date(job.createdAt * 1000).toLocaleDateString()}
                             </div>
-                            
+
                             {job.selectedFreelancers?.includes(address || '') && job.status === 1 && (
                               <div className="flex space-x-2">
                                 {submissionStatus?.needsRevision && (
